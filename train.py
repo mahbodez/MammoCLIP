@@ -97,6 +97,7 @@ def _find_latest_checkpoint(project_dir: str) -> Tuple[int, str]:
         and os.path.isdir(os.path.join(project_dir, f))
     ]
     if not model_dirs:
+        print("No previous epochs found.")
         return 0, ""
     most_recent = max(model_dirs, key=lambda d: int(re.search(r"\d+", d).group()))
     epoch = int(re.search(r"\d+", most_recent).group())
@@ -188,7 +189,7 @@ def train_from_scratch(cfg_path: str):
 
 def resume(project_dir: str):
     latest_epoch, resume_dir = _find_latest_checkpoint(project_dir)
-    if latest_epoch == 0:
+    if latest_epoch == 0 or resume_dir == "":
         print("No previous epochs found.")
         return
 
@@ -235,6 +236,8 @@ def resume(project_dir: str):
     # hand off to your existing loop
     training_loop(
         config=config,
+        accelerator=accelerator,
+        logger=logger,
         model=model,
         optimizer=opt,
         scheduler=sched,

@@ -10,6 +10,7 @@ import yaml
 from .dictable import Dictable
 from .preprocessing import MammogramPreprocessor, MammogramTransform
 import hashlib
+from copy import deepcopy
 
 
 class MammogramDataset(Dataset, Dictable):
@@ -136,14 +137,15 @@ class MammogramDataset(Dataset, Dictable):
             yaml.dump(config, f)
 
     @classmethod
-    def from_dict(cls, config: dict) -> "MammogramDataset":
+    def from_dict(cls, configuration: dict) -> "MammogramDataset":
         """
         Load the dataset configuration from a dictionary.
         Args:
-            config (dict): Configuration dictionary.
+            configuration (dict): Configuration dictionary.
         Returns:
             MammogramDataset: An instance of the dataset with the loaded configuration.
         """
+        config = deepcopy(configuration)
         if config["class_"] != "MammogramDataset":
             raise ValueError(
                 f"Expected class_ to be 'MammogramDataset', but got {config['class_']}"
