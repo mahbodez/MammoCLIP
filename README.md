@@ -45,17 +45,24 @@ MammoCLIP is a deep learning framework for analyzing mammography images and clin
 
 - **Data Extraction**  
   ```bash
-  python extract-birads-fast.py --config config.yaml
+  python extract-birads-fast.py
   ```
 
-- **Training**  
+- **Training**
+  From scratch
   ```bash
-  python train.py --config config.yaml
+  accelerate config &&
+  accelerate launch train.py --config config.yaml
+  ```
+  OR (to resume)
+  ```bash
+  accelerate config &&
+  accelerate launch train.py --resume --dir /path/to/project
   ```
 
-- **Monitoring**  
+- **Monitoring**  (edit the script before use)
   ```bash
-  python monitor_train.py --log-dir logs/
+  python monitor_train.py
   ```
 
 
