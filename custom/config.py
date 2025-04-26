@@ -177,11 +177,20 @@ class Config:
                 if is_dataclass(current_attr):
                     return current_attr.__class__.from_dict(value)
 
-                # 2) Or the field annotation itself is a dataclass?
                 if field_type and is_dataclass(field_type):
                     return field_type.from_dict(value)
 
-                # 3) Plain dict → recurse into its items
+                # Plain dict → merge with default dict if available, else recurse
+                if isinstance(current_attr, dict):
+                    merged = {}
+                    # start with default values
+                    for default_key, default_val in current_attr.items():
+                        merged[default_key] = default_val
+                    # override with provided values, converting nested items
+                    for k, v in value.items():
+                        merged[k] = convert_value(k, v)
+                    return merged
+                # fallback plain dict
                 return {k: convert_value(k, v) for k, v in value.items()}
 
             # List or tuple → convert each element

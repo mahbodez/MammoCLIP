@@ -17,6 +17,7 @@ from .train_loop_utils import (
     train_one_epoch,
 )
 from .freezer import freeze_submodules
+from .eval import evaluate_birads
 
 __all__ = [
     "setup_logger",
@@ -36,4 +37,5 @@ __all__ = [
     "poll_gpu_stats",
     "train_one_epoch",
     "freeze_submodules",
+    "evaluate_birads",
 ]

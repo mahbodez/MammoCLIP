@@ -64,7 +64,7 @@ class MammogramDataset(Dataset, Dictable):
             self.df = pd.read_csv(self.path_to_df).dropna(
                 how="any", subset=[pid_col] + image_cols + [text_col]
             )
-        elif df:
+        elif df is not None:
             self.path_to_df = None
             self.df = df.dropna(how="any", subset=[pid_col] + image_cols + [text_col])
         else:

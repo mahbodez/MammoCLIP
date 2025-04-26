@@ -75,7 +75,7 @@ training_params:
   lr_scheduler: wsd_schedule
   max_grad_norm: 1.0
   mixed_precision: bf16
-  num_epochs: 100
+  num_epochs: 300
   steady_fraction: 0.25
   train_fraction: 0.8
   warmup_fraction: 0.05
