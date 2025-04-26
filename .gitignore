@@ -1,0 +1,25 @@
+.cache/*
+data/
+mammoclip-v1/
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Jupyter Notebook checkpoints
+.ipynb_checkpoints/
+
+# VS Code settings
+.vscode/
+
+# Python virtual environments
+env/
+venv/
+.venv/
+
+# Logs
+*.log
+
+# OS generated files
+.DS_Store
+._.DS_Store
+Thumbs.db
