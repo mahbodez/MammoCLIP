@@ -1,0 +1,11 @@
+# Project dependencies
+torch
+torchvision
+transformers
+accelerate
+tqdm
+numpy
+pandas
+pyyaml
+opencv-python
+scikit-image
