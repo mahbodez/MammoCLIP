@@ -1,7 +1,7 @@
 csv_path: ./data/complete-mammo.csv
 dl_workers:
-  train: 8
-  val: 4
+  train: 2
+  val: 2
 eval_interval: 5
 freeze_text_model: true
 freeze_vision_model: true
@@ -68,7 +68,7 @@ train_ds:
     weights_col: weight
   class_: MammogramDataset
 training_params:
-  batch_size: 32
+  batch_size: 256
   gradient_accumulation_steps: 1
   lr_max: 0.0001
   lr_min: 5.0e-07
