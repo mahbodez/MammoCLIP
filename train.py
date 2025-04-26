@@ -156,23 +156,10 @@ def train_from_scratch(cfg_path: str):
 
     # number of parameters
     if accelerator.is_main_process:
-        print("Starting training from scratch...")
-        print(config)
         model_size = sum(p.numel() for p in model.parameters())
         trainable_size = sum(p.numel() for p in model.parameters() if p.requires_grad)
-        print(f"Model size: {model_size:,}")
-        print(
-            f"Trainable parameters: {trainable_size:,} ({100 * trainable_size / model_size:.2f}%)"
-        )
-        print(
-            f"Effective batch size: {stats['effective_batch_size']}",
-            f"\nOptimization steps per epoch: {stats['optimization_steps_per_epoch']}",
-            f"\nTotal Optimization steps: {stats['total_optimization_steps']}",
-            f"\nWarmup steps: {warmup}",
-            f"\nSteady steps: {steady}",
-            f"\nTotal steps: {total}",
-        )
         logger.info("Starting training from scratch...")
+        logger.info(config)
         logger.info(f"Model size: {model_size:,}")
         logger.info(
             f"Trainable parameters: {trainable_size:,} ({100 * trainable_size / model_size:.2f}%)"
@@ -228,23 +215,10 @@ def resume(project_dir: str):
 
     # number of parameters
     if accelerator.is_main_process:
-        print(f"Resuming from epoch {latest_epoch} in {resume_dir}")
-        print(config)
         model_size = sum(p.numel() for p in model.parameters())
         trainable_size = sum(p.numel() for p in model.parameters() if p.requires_grad)
-        print(f"Model size: {model_size:,}")
-        print(
-            f"Trainable parameters: {trainable_size:,} ({100 * trainable_size / model_size:.2f}%)"
-        )
-        print(
-            f"Effective batch size: {stats['effective_batch_size']}",
-            f"\nOptimization steps per epoch: {stats['optimization_steps_per_epoch']}",
-            f"\nTotal Optimization steps: {stats['total_optimization_steps']}",
-            f"\nWarmup steps: {warmup}",
-            f"\nSteady steps: {steady}",
-            f"\nTotal steps: {total}",
-        )
-        logger.info(f"Resuming training from epoch {latest_epoch}...")
+        logger.info(f"Resuming training from epoch {latest_epoch} in {resume_dir}...")
+        logger.info(config)
         logger.info(f"Model size: {model_size:,}")
         logger.info(
             f"Trainable parameters: {trainable_size:,} ({100 * trainable_size / model_size:.2f}%)"
