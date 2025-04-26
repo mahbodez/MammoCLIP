@@ -1,5 +1,6 @@
 from transformers import VisionTextDualEncoderModel, VisionTextDualEncoderConfig
 import torch
+import torch.nn as nn
 from typing import Optional, Union, Tuple, Callable
 from transformers.models.clip.modeling_clip import CLIPOutput, CLIPVisionModel
 from transformers import PreTrainedModel, AutoModel, AutoConfig
@@ -35,8 +36,13 @@ class MammoCLIP(VisionTextDualEncoderModel):
         printing_func: Optional[Callable] = None,
     ):
         super().__init__(config, vision_model, text_model)
-        self.vision_fused_attn = AttentionFusion(
-            embedding_dim=config.vision_config.hidden_size
+        # self.vision_fusion = AttentionFusion(
+        #     embedding_dim=config.vision_config.hidden_size
+        # )
+        self.vision_fusion = nn.Linear(
+            config.vision_config.hidden_size * config.num_views,
+            config.vision_config.hidden_size,
+            bias=False,
         )
         self.view_embedding = ViewEmbedding(
             num_views=config.num_views, embedding_dim=config.vision_config.hidden_size
@@ -152,13 +158,24 @@ class MammoCLIP(VisionTextDualEncoderModel):
         Logs:
             Prints the shapes of the fused embedding and attention weights for debugging purposes.
         """
+        B, N, D = embedded_images.shape
         # now we can use the attention fusion to get a single embedding
-        fused_embedding, attn_weights = self.vision_fused_attn(embedded_images)
+        if isinstance(self.vision_fusion, AttentionFusion):
+            fused_embedding, attn_weights = self.vision_fusion(embedded_images)
+        elif isinstance(self.vision_fusion, nn.Linear):
+            embedded_images = embedded_images.reshape(B, N * D)
+            fused_embedding = self.vision_fusion(embedded_images)
+            attn_weights = None
+        else:
+            raise ValueError(
+                "Currently only AttentionFusion and Linear fusion are supported."
+                f" Got {type(self.vision_fusion)}"
+            )
         # fused_embedding is of shape (bs, hidden_size)
         # attn_weights is of shape (bs, n_views)
-        self._print(
-            f"Fused embedding shape: {fused_embedding.shape}, Attention weights shape: {attn_weights.shape}"
-        )
+        self._print(f"Fused embedding shape: {fused_embedding.shape}")
+        if attn_weights is not None:
+            self._print(f"Attention weights shape: {attn_weights.shape}")
         return fused_embedding, attn_weights
 
     def _process_images(
