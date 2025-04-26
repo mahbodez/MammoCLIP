@@ -139,6 +139,7 @@ class Config:
             vision_model_name_or_path="microsoft/rad-dino",
             text_model_name_or_path="microsoft/BiomedVLP-CXR-BERT-general",
             num_views=4,
+            fusion_type="linear",
             verbose=False,
         )
     )

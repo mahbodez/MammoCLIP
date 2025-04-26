@@ -7,7 +7,7 @@ from transformers import PreTrainedModel, AutoModel, AutoConfig
 from transformers.models.clip.modeling_clip import clip_loss
 from .blocks import AttentionFusion, ViewEmbedding
 import logging
-
+from typing import Literal
 
 logger = logging.getLogger(__name__)
 
@@ -15,14 +15,21 @@ logger = logging.getLogger(__name__)
 class MammoCLIPConfig(VisionTextDualEncoderConfig):
     model_type = "mammo_clip"
 
-    def __init__(self, num_views=4, **kwargs):
+    def __init__(
+        self,
+        num_views=4,
+        fusion_type: Literal["linear", "attention"] = "linear",
+        **kwargs,
+    ):
         self.num_views = num_views
+        self.fusion_type = fusion_type
         super().__init__(**kwargs)
 
     @classmethod
     def from_vision_text_configs(cls, vision_config, text_config, **kwargs):
         config = super().from_vision_text_configs(vision_config, text_config, **kwargs)
         config.num_views = kwargs.pop("num_views", 4)
+        config.fusion_type = kwargs.pop("fusion_type", "linear")
         return config
 
 
@@ -36,14 +43,20 @@ class MammoCLIP(VisionTextDualEncoderModel):
         printing_func: Optional[Callable] = None,
     ):
         super().__init__(config, vision_model, text_model)
-        # self.vision_fusion = AttentionFusion(
-        #     embedding_dim=config.vision_config.hidden_size
-        # )
-        self.vision_fusion = nn.Linear(
-            config.vision_config.hidden_size * config.num_views,
-            config.vision_config.hidden_size,
-            bias=False,
-        )
+        if config.fusion_type == "attention":
+            self.vision_fusion = AttentionFusion(
+                embedding_dim=config.vision_config.hidden_size
+            )
+        elif config.fusion_type == "linear":
+            self.vision_fusion = nn.Linear(
+                config.vision_config.hidden_size * config.num_views,
+                config.vision_config.hidden_size,
+                bias=False,
+            )
+        else:
+            raise ValueError(
+                f"Unknown fusion type {config.fusion_type}. Supported types are 'linear' and 'attention'."
+            )
         self.view_embedding = ViewEmbedding(
             num_views=config.num_views, embedding_dim=config.vision_config.hidden_size
         )
@@ -374,11 +387,13 @@ class MammoCLIP(VisionTextDualEncoderModel):
                 text_model_name_or_path, *model_args, **kwargs_text
             )
         num_views = kwargs.pop("num_views", 4)
+        fusion_type = kwargs.pop("fusion_type", "linear")
         # instantiate config with corresponding kwargs
         config = MammoCLIPConfig.from_vision_text_configs(
             vision_config=vision_model.config,
             text_config=text_model.config,
             num_views=num_views,
+            fusion_type=fusion_type,
             **kwargs,
         )
 

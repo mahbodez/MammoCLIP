@@ -8,6 +8,7 @@ freeze_vision_model: true
 max_checkpoints: 5
 pretrained_model_cfg:
   num_views: 4
+  fusion_type: linear
   text_model_name_or_path: microsoft/BiomedVLP-CXR-BERT-general
   verbose: false
   vision_model_name_or_path: microsoft/rad-dino
@@ -17,20 +18,20 @@ seed: 42
 train_ds:
   attrs_:
     alt_text_cols:
-    - aug_report
+      - aug_report
     alt_text_prob: 0.5
     cache_dir: .cache
     image_cols:
-    - r_cc
-    - l_cc
-    - r_mlo
-    - l_mlo
+      - r_cc
+      - l_cc
+      - r_mlo
+      - l_mlo
     image_preprocessor:
       attrs_:
         extract_largest_cc: true
-        output_size: &id001 !!python/tuple
-        - 518
-        - 518
+        output_size: !!python/tuple &id001
+          - 518
+          - 518
         use_clahe: true
       class_: MammogramPreprocessor
     path_to_df: ./mammoclip-v1/train.csv
@@ -44,25 +45,25 @@ train_ds:
       truncation: true
     transform_function:
       attrs_:
-        degrees: 10
+        degrees: 15
         is_validation: false
-        mean: &id002 !!python/tuple
-        - 0.281
-        noise_std: &id003 !!python/tuple
-        - 0.0
-        - 0.03
-        scale: &id004 !!python/tuple
-        - 0.9
-        - 1.1
+        mean: !!python/tuple &id002
+          - 0.281
+        noise_std: !!python/tuple &id003
+          - 0.0
+          - 0.02
+        scale: !!python/tuple &id004
+          - 0.9
+          - 1.1
         shear: !!python/tuple
-        - 10
-        - 10
+          - 10
+          - 10
         size: *id001
-        std: &id005 !!python/tuple
-        - 0.217
-        translate: &id006 !!python/tuple
-        - 0.05
-        - 0.05
+        std: !!python/tuple &id005
+          - 0.217
+        translate: !!python/tuple &id006
+          - 0.05
+          - 0.05
       class_: MammogramTransform
     weights_col: weight
   class_: MammogramDataset
@@ -84,10 +85,10 @@ val_ds:
     alt_text_prob: 0.0
     cache_dir: .cache
     image_cols:
-    - r_cc
-    - l_cc
-    - r_mlo
-    - l_mlo
+      - r_cc
+      - l_cc
+      - r_mlo
+      - l_mlo
     image_preprocessor:
       attrs_:
         extract_largest_cc: true
@@ -111,8 +112,8 @@ val_ds:
         noise_std: *id003
         scale: *id004
         shear: !!python/tuple
-        - 20
-        - 20
+          - 20
+          - 20
         size: *id001
         std: *id005
         translate: *id006

@@ -19,7 +19,10 @@ venv/
 # Logs
 *.log
 
-# OS generated files
+# OS generated files anywhere (including in subdirectories)
 .DS_Store
 ._.DS_Store
+**/.DS_Store
+**/._.DS_Store
+**/__pycache__
 Thumbs.db
