@@ -38,7 +38,7 @@ def _make_dataloader(ds, sampler, batch_size, num_workers, shuffle_if_no_sampler
         shuffle=(sampler is None and shuffle_if_no_sampler),
         num_workers=num_workers,
         pin_memory=False,
-        persistent_workers=True,
+        persistent_workers=num_workers > 0,
         drop_last=True,
     )
 
