@@ -60,6 +60,7 @@ def training_loop(
     for epoch in range(
         starting_epoch, config.training_params["num_epochs"] + starting_epoch
     ):
+        torch.cuda.empty_cache()
         opt_steps = train_one_epoch(
             epoch=epoch,
             config=config,
@@ -83,7 +84,6 @@ def training_loop(
             resuming=resuming,
             optimization_steps=opt_steps,
         )
-    accelerator.clear()
 
 
 def _find_latest_checkpoint(project_dir: str) -> Tuple[int, str]:
@@ -147,7 +147,7 @@ def train_from_scratch(cfg_path: str):
     )
 
     ddp_kwargs = DistributedDataParallelKwargs(
-        find_unused_parameters=True, broadcast_buffers=False
+        find_unused_parameters=True, broadcast_buffers=True, static_graph=True
     )
     # Initialize accelerator and tensorboard logging
     accelerator, logger = init_accelerator_and_logger(
@@ -206,7 +206,7 @@ def resume(project_dir: str):
 
     # Initialize accelerator and tensorboard logging
     ddp_kwargs = DistributedDataParallelKwargs(
-        find_unused_parameters=True, broadcast_buffers=False
+        find_unused_parameters=True, broadcast_buffers=True, static_graph=True
     )
     # Initialize accelerator and tensorboard logging
     accelerator, logger = init_accelerator_and_logger(

@@ -11,21 +11,33 @@ def cleanup_checkpoints(
 ) -> None:
     """
     Remove older checkpoints matching prefix_<num>
-    keeping only the newest max_checkpoints.
+    (and if you passed "xxx_resumed", also cleans "xxx_<num>")
+    keeping only the newest max_checkpoints per prefix.
     """
-    pattern = rf"^{prefix}_(\d+)$"
-    names = [
-        d
-        for d in os.listdir(project_dir)
-        if os.path.isdir(os.path.join(project_dir, d)) and re.match(pattern, d)
-    ]
-    # sort by epoch number
-    names.sort(key=lambda x: int(re.match(pattern, x).group(1)))
-    keep = set(names[-max_checkpoints:])
-    for d in names:
-        if d not in keep:
-            logger.info(f"Removing {d} ...")
-            shutil.rmtree(os.path.join(project_dir, d))
+    # build list of prefixes to clean
+    prefixes = [prefix]
+    if prefix.endswith("_resumed"):
+        base = prefix[: -len("_resumed")]
+        prefixes.append(base)
+
+    for pref in prefixes:
+        # escape in case pref contains regex chars
+        pattern = re.compile(rf"^{re.escape(pref)}_(\d+)$")
+        # collect (dirname, epoch) tuples
+        all_ckpts = []
+        for d in os.listdir(project_dir):
+            m = pattern.match(d)
+            if m and os.path.isdir(os.path.join(project_dir, d)):
+                epoch = int(m.group(1))
+                all_ckpts.append((d, epoch))
+
+        # sort by epoch, keep only the last `max_checkpoints`
+        all_ckpts.sort(key=lambda x: x[1])
+        keep = {d for d, _ in all_ckpts[-max_checkpoints:]}
+        for d, _ in all_ckpts:
+            if d not in keep:
+                logger.info(f"Removing {d} ...")
+                shutil.rmtree(os.path.join(project_dir, d))
 
 
 def save_checkpoint(

@@ -1,14 +1,14 @@
 csv_path: ./data/complete-mammo.csv
 dl_workers:
-  train: 2
-  val: 2
+  train: 4
+  val: 4
 eval_interval: 5
 freeze_text_model: true
 freeze_vision_model: true
 max_checkpoints: 5
 pretrained_model_cfg:
-  num_views: 4
   fusion_type: linear
+  num_views: 4
   text_model_name_or_path: microsoft/BiomedVLP-CXR-BERT-general
   verbose: false
   vision_model_name_or_path: microsoft/rad-dino
@@ -29,7 +29,7 @@ train_ds:
     image_preprocessor:
       attrs_:
         extract_largest_cc: true
-        output_size: !!python/tuple &id001
+        output_size:
           - 518
           - 518
         use_clahe: true
@@ -47,35 +47,37 @@ train_ds:
       attrs_:
         degrees: 15
         is_validation: false
-        mean: !!python/tuple &id002
+        mean:
           - 0.281
-        noise_std: !!python/tuple &id003
+        noise_std:
           - 0.0
           - 0.02
-        scale: !!python/tuple &id004
+        scale:
           - 0.9
           - 1.1
-        shear: !!python/tuple
+        shear:
           - 10
           - 10
-        size: *id001
-        std: !!python/tuple &id005
+        size:
+          - 518
+          - 518
+        std:
           - 0.217
-        translate: !!python/tuple &id006
+        translate:
           - 0.05
           - 0.05
       class_: MammogramTransform
     weights_col: weight
   class_: MammogramDataset
 training_params:
-  batch_size: 256
+  batch_size: 128
   gradient_accumulation_steps: 1
-  lr_max: 0.0001
+  lr_max: 5.0e-05
   lr_min: 5.0e-07
   lr_scheduler: wsd_schedule
   max_grad_norm: 1.0
-  mixed_precision: bf16
-  num_epochs: 100
+  mixed_precision: fp16
+  num_epochs: 300
   steady_fraction: 0.25
   train_fraction: 0.8
   warmup_fraction: 0.05
@@ -92,7 +94,9 @@ val_ds:
     image_preprocessor:
       attrs_:
         extract_largest_cc: true
-        output_size: *id001
+        output_size:
+          - 518
+          - 518
         use_clahe: true
       class_: MammogramPreprocessor
     path_to_df: ./mammoclip-v1/val.csv
@@ -108,14 +112,24 @@ val_ds:
       attrs_:
         degrees: 10
         is_validation: true
-        mean: *id002
-        noise_std: *id003
-        scale: *id004
-        shear: !!python/tuple
+        mean:
+          - 0.281
+        noise_std:
+          - 0.0
+          - 0.02
+        scale:
+          - 0.9
+          - 1.1
+        shear:
           - 20
           - 20
-        size: *id001
-        std: *id005
-        translate: *id006
+        size:
+          - 518
+          - 518
+        std:
+          - 0.217
+        translate:
+          - 0.05
+          - 0.05
       class_: MammogramTransform
   class_: MammogramDataset
