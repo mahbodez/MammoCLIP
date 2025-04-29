@@ -7,6 +7,7 @@ from tenacity import retry, stop_after_attempt, wait_fixed
 from openai import OpenAI
 from google import genai
 from google.genai import types
+from ollama import Client
 import time
 from functools import partial
 import os
@@ -49,6 +50,11 @@ def decode_response(
     Returns:
         str: The decoded response.
     """
+    # if the response contains thinking tokens, remove them
+    # they are usually enclosed between <think> and </think>
+    if "<think>" in respone and "</think>" in respone:
+        end = respone.rindex("</think>")
+        respone = respone[end + len("</think>") :]
     start, end = enclosing
     try:
         result = respone.split(start)[1].split(end)[0]
@@ -57,12 +63,13 @@ def decode_response(
     return result.strip()
 
 
-@retry(stop=stop_after_attempt(3), wait=wait_fixed(1))
+@retry(stop=stop_after_attempt(3), wait=wait_fixed(2))
 def openai_get_response(
     client: OpenAI,
     model: str,
     prompt: str,
     max_tokens: int = 256,
+    temperature: float = 1.2,
 ):
     response = (
         client.chat.completions.create(
@@ -74,10 +81,28 @@ def openai_get_response(
             ),
             timeout=15,
             max_tokens=max_tokens,
+            temperature=temperature,
         )
         .choices[0]
         .message.content
     )
+    return response
+
+
+@retry(stop=stop_after_attempt(3), wait=wait_fixed(2))
+def ollama_get_response(
+    client: Client,
+    model: str,
+    prompt: str,
+):
+    response = client.chat(
+        model=model,
+        messages=(
+            [
+                {"role": "user", "content": prompt},
+            ]
+        ),
+    ).message.content
     return response
 
 
@@ -109,7 +134,8 @@ Do NOT add or omit any medical details.
 Maintain the original diagnostic meaning, clarity, and specificity.
 Only alter the sentence structure, phrasing, or synonyms where medically equivalent and clearly appropriate.
 Ensure the paraphrase is phrased naturally and professionally, as expected in clinical mammography reports.
-Preserve key medical terminology (e.g., BI-RADS categories, anatomical terms, pathology findings), but you may substitute medically approved synonyms if and only if they fully maintain the original meaning.
+Preserve key medical terminology (e.g., BIRADS categories, anatomical terms, pathology findings), but you may substitute medically approved synonyms if and only if they fully maintain the original meaning.
+Try your best to change the words and sentence structure but not the meaning.
 
 The mammogram report in <> is as follows:
 
@@ -119,9 +145,11 @@ Your paraphrased report should be enclosed in <>
 """
 
 models = {
-    "openai-mini": "gpt-4.1-mini-2025-04-14",
-    "openai": "gpt-4.1-2025-04-14",
+    "openai-mini": "gpt-4.1-mini",
+    "openai-4.1": "gpt-4.1",
+    "openai-4o": "gpt-4o",
     "google": "models/gemini-2.0-flash",
+    "ollama:qwen": "qwen3",
 }
 
 
@@ -139,20 +167,21 @@ def augment_reports(
         get_response = partial(
             openai_get_response, client=client, model=models[provider]
         )
-        tqdm.write(
-            f"{Fore.BLUE}[{thread_name}]{Style.RESET_ALL} Using {provider} model: {models[provider]}"
-        )
     elif "google" in provider:
         client = genai.Client(api_key=os.environ["GEMINI_API_KEY"])
         get_response = partial(
             google_get_response, client=client, model=models[provider]
         )
-        thread_name = threading.current_thread().name
-        tqdm.write(
-            f"{Fore.BLUE}[{thread_name}]{Style.RESET_ALL} Using {provider} model: {models[provider]}"
+    elif "ollama" in provider:
+        client = Client(host="http://adir-pc.local:11435")
+        get_response = partial(
+            ollama_get_response, client=client, model=models[provider]
         )
     else:
         raise ValueError(f"Unsupported provider: {provider}")
+    tqdm.write(
+        f"{Fore.BLUE}[{thread_name}]{Style.RESET_ALL} Using {provider} model: {models[provider]}"
+    )
 
     df = ref_df.copy(deep=True)
     # if the aug col is non-existent, create it
@@ -338,8 +367,9 @@ def main():
         )
 
     provider = Prompt.ask(
-        "Enter the provider to use for augmentation (openai-mini, openai, google)",
-        default="openai-mini",
+        f"Enter the provider/model to use for augmentation",
+        default=list(models.keys())[0],
+        choices=list(models.keys()),
         console=console,
     )
     if provider not in models:
