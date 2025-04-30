@@ -3,6 +3,7 @@ from .model import MammoCLIP, MammoCLIPConfig
 from .dictable import Dictable
 from .preprocessing import MammogramPreprocessor, MammogramTransform
 from .mammodata import MammogramDataset
+from .sampler import DistributedWeightedRandomSampler
 from .config import Config
 
 __all__ = [
@@ -11,6 +12,7 @@ __all__ = [
     "MammogramPreprocessor",
     "MammogramTransform",
     "MammogramDataset",
+    "DistributedWeightedRandomSampler",
     "Dictable",
     "AttentionFusion",
     "ViewEmbedding",

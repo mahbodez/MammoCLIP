@@ -18,8 +18,28 @@ from .train_loop_utils import (
 )
 from .freezer import freeze_submodules
 from .eval import evaluate_birads
+from .dist_utils import (
+    get_rank,
+    get_world_size,
+    is_main_process,
+    synchronize,
+    reduce_tensor,
+    gather_tensors,
+    init_distributed_mode,
+    is_dist_avail_and_initialized,
+    setup_for_distributed,
+)
 
 __all__ = [
+    "get_rank",
+    "get_world_size",
+    "is_main_process",
+    "synchronize",
+    "reduce_tensor",
+    "gather_tensors",
+    "init_distributed_mode",
+    "is_dist_avail_and_initialized",
+    "setup_for_distributed",
     "setup_logger",
     "set_seed",
     "build_model_and_optim",
