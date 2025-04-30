@@ -72,7 +72,7 @@ train_ds:
     weights_col: weight
   class_: MammogramDataset
 training_params:
-  batch_size: 6
+  batch_size: 5
   gradient_accumulation_steps: 8
   lr_max: 5.0e-05
   lr_min: 5.0e-07
