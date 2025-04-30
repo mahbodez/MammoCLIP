@@ -1,6 +1,7 @@
 import os
 from tqdm.auto import tqdm
-from accelerate import Accelerator, DistributedDataParallelKwargs
+import torch
+from .dist_utils import is_main_process, synchronize, get_rank
 from typing import Tuple, Dict
 from custom import Config
 from .stats import (
@@ -17,27 +18,19 @@ from .train_utils import (
 from logging import Logger
 
 
-def init_accelerator_and_logger(
-    config: Config, ddp_kwargs: DistributedDataParallelKwargs = None
-) -> Tuple[Accelerator, Logger]:
-    accel = Accelerator(
-        mixed_precision=config.training_params["mixed_precision"],
-        gradient_accumulation_steps=config.training_params[
-            "gradient_accumulation_steps"
-        ],
-        log_with=["tensorboard"],
-        project_dir=os.path.join(config.project_dir, "logs"),
-        kwargs_handlers=[ddp_kwargs] if ddp_kwargs is not None else [],
-    )
+def init_logger(config: Config) -> Logger:
+    """
+    Initialize logger on main process.
+    """
+    # Setup logger only on main process
     logger = None
-    if accel.is_main_process:
+    if is_main_process():
         os.makedirs(config.project_dir, exist_ok=True)
         logger = setup_logger(
             "training",
             log_to_file=os.path.join(config.project_dir, "logs", "train.log"),
         )
-        accel.init_trackers(config.project_dir)
-    return accel, logger
+    return logger
 
 
 def poll_gpu_stats() -> Dict[str, float]:
@@ -49,51 +42,63 @@ def poll_gpu_stats() -> Dict[str, float]:
 
 
 def train_one_epoch(
-    epoch: int,
+    model: torch.nn.Module,
+    optimizer: torch.optim.Optimizer,
+    scheduler: torch.optim.lr_scheduler.LRScheduler,
+    train_dl: torch.utils.data.DataLoader,
     config: Config,
-    model,
-    optimizer,
-    scheduler,
-    train_dl,
-    accelerator: Accelerator,
+    epoch: int,
+    logger: Logger | None,
     total_steps: int,
     starting_epoch: int,
     optimization_steps: float = 0.0,
 ) -> float:
-    grad_acc = config.training_params["gradient_accumulation_steps"]
+    gpu_id = get_rank()
+    grad_acc = config.training_params.get("gradient_accumulation_steps", 1)
     pbar = tqdm(
         total=len(train_dl) / grad_acc,
-        disable=not accelerator.is_local_main_process,
+        disable=not is_main_process(),
         desc=f"Epoch {epoch+1}/{starting_epoch+config.training_params['num_epochs']}",
     )
-    gpu_stats = poll_gpu_stats()
+    gpu_stats = {}
     opt_steps = optimization_steps
     model.train()
+    # Don't forget to set_epoch for distributed sampler
+    if hasattr(train_dl.sampler, "set_epoch"):
+        train_dl.sampler.set_epoch(epoch)
+    synchronize()
     for i, batch in enumerate(train_dl):
-        with accelerator.accumulate(model):
-            optimizer.zero_grad(set_to_none=True)
-            loss = model(**batch, return_loss=True).loss
-            accelerator.backward(loss)
-            if accelerator.sync_gradients:
-                accelerator.clip_grad_norm_(
-                    model.parameters(), config.training_params["max_grad_norm"]
-                )
+        # Move batch to local rank GPU
+        for k, v in batch.items():
+            if isinstance(v, torch.Tensor):
+                batch[k] = v.to(gpu_id)
+        # forward
+        outputs = model(**batch, return_loss=True)
+        loss = outputs.loss / grad_acc
+        loss.backward()
+        # optimization step if gradient accumulation is done
+        if (i + 1) % grad_acc == 0 or i == len(train_dl) - 1:
+            # gradient clipping
+            torch.nn.utils.clip_grad_norm_(
+                model.parameters(), config.training_params.get("max_grad_norm", 1.0)
+            )
             optimizer.step()
             scheduler.step()
+            optimizer.zero_grad(set_to_none=True)
+            opt_steps += 1
+            # update GPU stats periodically
+            if is_main_process() and opt_steps % 10 == 0:
+                gpu_stats = poll_gpu_stats()
 
-        opt_steps += 1 / grad_acc
-        if accelerator.is_main_process and int(opt_steps) % 10 == 0:
-            gpu_stats = poll_gpu_stats()
-
-        logs = {
-            "step": f"{int(opt_steps)}/{total_steps}",
-            "loss": loss.item(),
-            "lr": scheduler.get_last_lr()[0],
-            **gpu_stats,
-        }
+        # log progress
         pbar.update(1 / grad_acc)
-        pbar.set_postfix(**logs)
-        accelerator.log(logs, step=int(opt_steps))
+        pbar.set_postfix(
+            {"loss": loss.item(), "lr": scheduler.get_last_lr()[0], **gpu_stats}
+        )
+        if is_main_process():
+            logger.info(
+                f"Step {opt_steps}/{total_steps} - loss: {loss.item():.4f} - lr: {scheduler.get_last_lr()[0]:.6f}"
+            )
 
     pbar.close()
     return opt_steps
@@ -102,28 +107,28 @@ def train_one_epoch(
 def eval_and_checkpoint(
     epoch: int,
     config: Config,
-    model,
-    val_dl,
-    accelerator: Accelerator,
+    model: torch.nn.Module,
+    val_dl: torch.utils.data.DataLoader,
     logger: Logger,
     resuming: bool,
     optimization_steps: float,
 ):
-    # eval
+    # evaluation
     if (epoch + 1) % config.eval_interval == 0:
-        evaluate(model, val_dl, accelerator, logger, int(optimization_steps))
-
-    # save
-    accelerator.wait_for_everyone()
-    if accelerator.is_main_process:
+        evaluate(model, val_dl, logger, int(optimization_steps))
+    # synchronize processes before saving
+    synchronize()
+    if is_main_process():
         last = epoch == config.training_params["num_epochs"] - 1
         if ((epoch + 1) % config.save_interval == 0) or last:
             prefix = "model_resumed" if resuming else "model"
             cleanup_checkpoints(
                 config.project_dir, prefix, config.max_checkpoints, logger
             )
+            # if wrapped in DDP, unwrap
+            base_model = model.module if hasattr(model, "module") else model
             save_checkpoint(
-                accelerator.unwrap_model(model),
+                base_model,
                 config.project_dir,
                 prefix,
                 epoch + 1,

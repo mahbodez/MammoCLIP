@@ -3,9 +3,13 @@ from transformers import get_wsd_schedule
 from custom import MammoCLIP, Config
 from .stats import stats_from_epochs
 from .freezer import freeze_submodules
+from torch.nn.parallel import DistributedDataParallel as DDP
+from .dist_utils import get_rank, is_dist_avail_and_initialized
 
 
-def build_model_and_optim(config: Config, dataset_size: int, resume_from: str = None):
+def build_model_and_optim(
+    config: Config, dataset_size: int, resume_from: str = None
+) -> tuple:
     if resume_from:
         # resume training
         model = MammoCLIP.from_pretrained(resume_from)
@@ -51,4 +55,10 @@ def build_model_and_optim(config: Config, dataset_size: int, resume_from: str = 
         min_lr_ratio=config.training_params["lr_min"]
         / config.training_params["lr_max"],
     )
+
+    if is_dist_avail_and_initialized():
+        rank = get_rank()
+        model = model.to(rank)
+        model = DDP(model, device_ids=[rank], **config.ddp_kwargs)
+
     return model, optimizer, scheduler, stats, warmup, steady, total

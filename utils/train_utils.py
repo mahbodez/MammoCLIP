@@ -1,9 +1,16 @@
 import os, re, shutil
 import torch
+import torch.nn as nn
 from tqdm.auto import tqdm
-from accelerate import Accelerator
 from logging import Logger
 from custom import MammoCLIP
+from .dist_utils import (
+    is_dist_avail_and_initialized,
+    reduce_tensor,
+    is_main_process,
+    synchronize,
+    get_rank,
+)
 
 
 def cleanup_checkpoints(
@@ -57,28 +64,52 @@ def save_checkpoint(
 
 @torch.inference_mode()
 def evaluate(
-    model,
+    model: nn.Module,
     val_dl: torch.utils.data.DataLoader,
-    accelerator: Accelerator,
     logger: Logger,
     step: int,
 ):
-    model.eval()
-    losses = []
+    """
+    Evaluate model on validation loader, aggregate loss across DDP, and log on main process.
+    """
+    gpu_id = get_rank()
     pbar = tqdm(
         total=len(val_dl),
-        disable=not accelerator.is_local_main_process,
+        disable=not is_main_process(),
         desc="Validation",
     )
+    losses = []
+    # Dont forget to set_epoch for the sampler
+    if hasattr(val_dl.sampler, "set_epoch"):
+        val_dl.sampler.set_epoch(step)
+    model.eval()
+    # -------------------- DDP-aware evaluation loop -------------------
+    synchronize()  # synchronize before starting
     for batch in val_dl:
+        # move batch to local rank GPU
+        for k, v in batch.items():
+            if isinstance(v, torch.Tensor):
+                batch[k] = v.to(gpu_id)
+        # forward
         loss = model(**batch, return_loss=True).loss.item()
         losses.append(loss)
         pbar.update(1)
         pbar.set_postfix({"val_loss": loss})
     pbar.close()
-    avg = sum(losses) / len(losses) if losses else 0.0
-    if accelerator.is_main_process:
+    # ------------------------------------------------------------------
+    # DDP-aware evaluation statistics
+    local_sum = sum(losses)
+    local_count = len(losses)
+    if is_dist_avail_and_initialized():
+        device = next(model.parameters()).device
+        stats = torch.tensor([local_sum, local_count], device=device)
+        stats = reduce_tensor(stats)
+        total_sum, total_count = stats.tolist()
+        avg = total_sum / total_count if total_count > 0 else 0.0
+    else:
+        avg = local_sum / local_count if local_count > 0 else 0.0
+    # log only from the main process
+    if is_main_process():
         logger.info(f"Val loss @ step {step}: {avg:.4f}")
-    accelerator.log({"val_loss": avg}, step=step)
     model.train()
     return avg

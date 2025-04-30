@@ -1,8 +1,10 @@
 import os
 import pandas as pd
 import numpy as np
-from torch.utils.data import DataLoader, WeightedRandomSampler
+from torch.utils.data import DataLoader, DistributedSampler
+from custom import DistributedWeightedRandomSampler
 from custom import MammogramDataset, Config
+from .dist_utils import get_rank, get_world_size
 
 
 def split_df(df: pd.DataFrame, config: Config):
@@ -20,22 +22,27 @@ def split_df(df: pd.DataFrame, config: Config):
     return df_train, df_val
 
 
-def _make_sampler(weights, dataset_len):
-    return (
-        WeightedRandomSampler(
-            weights=weights, num_samples=dataset_len, replacement=True
+def _make_sampler(dataset, weights, shuffle=True):
+    sampler = (
+        DistributedWeightedRandomSampler(
+            weights=weights, num_samples_total=len(dataset), replacement=True
         )
         if weights is not None
-        else None
+        else DistributedSampler(
+            dataset=dataset,
+            num_replicas=get_world_size(),
+            rank=get_rank(),
+            shuffle=shuffle,
+        )
     )
+    return sampler
 
 
-def _make_dataloader(ds, sampler, batch_size, num_workers, shuffle_if_no_sampler: bool):
+def _make_dataloader(dataset, sampler, batch_size, num_workers):
     return DataLoader(
-        ds,
+        dataset,
         batch_size=batch_size,
         sampler=sampler,
-        shuffle=(sampler is None and shuffle_if_no_sampler),
         num_workers=num_workers,
         pin_memory=False,
         persistent_workers=num_workers > 0,
@@ -63,17 +70,27 @@ def prepare_dataloaders(config: Config, resuming: bool = False):
     val_ds = MammogramDataset.from_dict(config.val_ds)
 
     # 3) samplers
-    train_sampler = _make_sampler(train_ds.get_weights(), len(train_ds))
-    val_sampler = _make_sampler(val_ds.get_weights(), len(val_ds))
+    train_sampler = _make_sampler(
+        train_ds, train_ds.get_weights(), len(train_ds), shuffle=True
+    )
+    val_sampler = _make_sampler(
+        val_ds, val_ds.get_weights(), len(val_ds), shuffle=False
+    )
 
     # 4) dataloaders
     bs = config.training_params["batch_size"]
     workers = config.dl_workers
     train_dl = _make_dataloader(
-        train_ds, train_sampler, bs, workers["train"], shuffle_if_no_sampler=True
+        train_ds,
+        train_sampler,
+        bs,
+        workers["train"],
     )
     val_dl = _make_dataloader(
-        val_ds, val_sampler, bs, workers["val"], shuffle_if_no_sampler=False
+        val_ds,
+        val_sampler,
+        bs,
+        workers["val"],
     )
 
     return train_dl, val_dl, len(train_ds), len(val_ds)

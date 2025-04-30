@@ -17,6 +17,12 @@ class Config:
     freeze_vision_model: bool = True
     freeze_text_model: bool = True
 
+    ddp_kwargs: dict = field(
+        default_factory=lambda: dict(
+            find_unused_parameters=True,
+        )
+    )
+
     training_params: dict = field(
         default_factory=lambda: dict(
             num_epochs=100,

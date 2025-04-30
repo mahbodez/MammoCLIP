@@ -1,4 +1,5 @@
-.cache/*
+.cache/
+.pytest_cache/
 data/
 mammoclip-v1/
 __pycache__/

@@ -11,7 +11,7 @@ from .stats import (
 )
 from .logger import setup_logger
 from .train_loop_utils import (
-    init_accelerator_and_logger,
+    init_ddp_and_logger,
     eval_and_checkpoint,
     poll_gpu_stats,
     train_one_epoch,
@@ -52,7 +52,7 @@ __all__ = [
     "get_gpu_memory_usage",
     "get_gpu_power_usage",
     "get_gpu_temperature",
-    "init_accelerator_and_logger",
+    "init_ddp_and_logger",
     "eval_and_checkpoint",
     "poll_gpu_stats",
     "train_one_epoch",

@@ -1,6 +1,7 @@
 import os
 import torch
 import torch.distributed as dist
+from logging import getLogger
 
 """
 Distributed utilities for PyTorch training.
@@ -9,6 +10,8 @@ This module provides helper functions to initialize and manage
 PyTorch distributed training, including setup, synchronization,
 tensor reduction, and gathering across processes.
 """
+
+log = getLogger(__name__)
 
 
 def is_dist_avail_and_initialized():
@@ -80,7 +83,10 @@ def setup_for_distributed(is_master):
 
 def init_distributed_mode(backend="nccl", init_method="env://"):
     """
-    Initialize torch.distributed process group based on environment variables.
+    - Initialize torch.distributed process group based on environment variables.
+    - This function sets up the distributed training environment
+    and initializes the process group.
+    - It **MUST** be called before any distributed operations.
 
     Args:
         backend (str): Backend to use (e.g., 'nccl', 'gloo').
@@ -97,7 +103,23 @@ def init_distributed_mode(backend="nccl", init_method="env://"):
         setup_for_distributed(rank == 0)
         dist.barrier()
     else:
-        print("Not using distributed mode")
+        log.warning(
+            "Distributed training requires RANK and WORLD_SIZE environment variables to be set."
+            "\nAre you forgetting to use torchrun or torch.distributed.launch?"
+        )
+
+
+def cleanup():
+    """
+    - Cleanup the distributed process group.
+    - **MUST** be called after training is done.
+    """
+    if is_dist_avail_and_initialized():
+        dist.destroy_process_group()
+        setup_for_distributed(False)
+        print("Distributed process group destroyed")
+    else:
+        print("No distributed process group to destroy")
 
 
 def synchronize():

@@ -3,6 +3,7 @@ import sys
 import time
 import pty
 import subprocess
+import torch
 
 SCRIPT_NAME = "train.py"
 SCRIPT_DIR = "/home/adir/vscode/MammoCLIP"  # Adjust to your actual path if needed
@@ -56,17 +57,20 @@ def run_command_with_tty(command, cwd=None):
 def main():
     os.chdir(SCRIPT_DIR)  # Ensure the working dir is where train-ugan.py resides.
 
+    # Determine number of GPUs for DDP
+    num_gpus = torch.cuda.device_count() if torch.cuda.is_available() else 1
     while True:
         print("============================================================")
-        print(f"Launching {SCRIPT_NAME} with accelerate (PTY mode).")
+        print(f"Launching {SCRIPT_NAME} with torch.distributed.run ({num_gpus} processes) (PTY mode).")
         print("============================================================")
 
         # Build our shell command:
         # 1) source base environment
-        # 2) run accelerate launch train-ugan.py
+        # 2) run torch.distributed.run
         command = (
             f"bash -c 'source {CONDA_PATH} && "
-            f"accelerate launch {SCRIPT_NAME} --resume --dir ./mammoclip-v1'"
+            f"python -m torch.distributed.run --nproc_per_node={num_gpus} "
+            f"{SCRIPT_NAME} --resume --dir ./mammoclip-v1'"
         )
 
         # Run inside a pseudo-tty to preserve TQDM's live progress bars

@@ -1,7 +1,8 @@
 import math, torch
 from torch.utils.data import Sampler
-import torch.distributed as dist
 from logging import getLogger
+from utils.dist_utils import is_dist_avail_and_initialized
+from utils.dist_utils import get_rank, get_world_size
 
 log = getLogger(__name__)
 
@@ -9,8 +10,8 @@ log = getLogger(__name__)
 class DistributedWeightedRandomSampler(Sampler[int]):
     """
     Draws `num_samples_total` weighted samples from the whole dataset, then
-    hands each distributed rank an equally‑sized slice.  Works under
-    torch.distributed (DDP), HuggingFace `accelerate`, or single‑process mode.
+    hands each distributed rank an equally‑sized slice. Works under
+    torch.distributed (DDP) or single‑process mode.
 
     - With replacement: behaves like torch.utils.data.WeightedRandomSampler.
     - Without replacement: raises if you ask for more samples than items.
@@ -35,8 +36,8 @@ class DistributedWeightedRandomSampler(Sampler[int]):
         self.base_seed = seed
         self.epoch = 0
 
-        self.world_size = dist.get_world_size() if dist.is_initialized() else 1
-        self.rank = dist.get_rank() if dist.is_initialized() else 0
+        self.world_size = get_world_size() if is_dist_avail_and_initialized() else 1
+        self.rank = get_rank() if is_dist_avail_and_initialized() else 0
 
         self.num_samples_total = num_samples_total or len(self.weights)
 
@@ -63,7 +64,7 @@ class DistributedWeightedRandomSampler(Sampler[int]):
         )
         log.info("Rank %d will sample %d items", self.rank, self.num_samples_per_rank)
 
-    # accelerate will call this automatically; DDP won't, so do it yourself.
+    # In DDP, call sampler.set_epoch(epoch) at the start of each epoch.
     def set_epoch(self, epoch: int):
         self.epoch = int(epoch)
 

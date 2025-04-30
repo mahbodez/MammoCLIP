@@ -7,15 +7,14 @@ from custom import (
 )
 from torch.utils.data import DataLoader
 import os
-import torch.distributed as dist
-from accelerate import DistributedDataParallelKwargs, Accelerator
+from utils.train_loop_utils import init_logger
+from utils.dist_utils import is_main_process, init_distributed_mode, cleanup
 from logging import Logger
 import argparse as ap
 from utils import (
     build_model_and_optim,
     prepare_dataloaders,
     set_seed,
-    init_accelerator_and_logger,
     train_one_epoch,
     eval_and_checkpoint,
 )
@@ -23,7 +22,6 @@ from utils import (
 
 def training_loop(
     config: Config,
-    accelerator: Accelerator,
     logger: Logger,
     model: MammoCLIP,
     optimizer: torch.optim.Optimizer,
@@ -38,21 +36,6 @@ def training_loop(
         resuming and starting_epoch > 0
     ), "Starting epoch must be 0 if not resuming, or > 0 if resuming."
 
-    # Prepare everything
-    (
-        model,
-        optimizer,
-        scheduler,
-        train_dl,
-        val_dl,
-    ) = accelerator.prepare(
-        model,
-        optimizer,
-        scheduler,
-        train_dl,
-        val_dl,
-    )
-
     opt_steps = 0.0
     total_steps = stats["total_optimization_steps"]
 
@@ -60,7 +43,6 @@ def training_loop(
     for epoch in range(
         starting_epoch, config.training_params["num_epochs"] + starting_epoch
     ):
-        torch.cuda.empty_cache()
         opt_steps = train_one_epoch(
             epoch=epoch,
             config=config,
@@ -68,7 +50,7 @@ def training_loop(
             optimizer=optimizer,
             scheduler=scheduler,
             train_dl=train_dl,
-            accelerator=accelerator,
+            logger=logger,
             total_steps=total_steps,
             starting_epoch=starting_epoch,
             optimization_steps=opt_steps,
@@ -79,11 +61,11 @@ def training_loop(
             config=config,
             model=model,
             val_dl=val_dl,
-            accelerator=accelerator,
             logger=logger,
             resuming=resuming,
             optimization_steps=opt_steps,
         )
+    torch.cuda.empty_cache()
 
 
 def _find_latest_checkpoint(project_dir: str) -> Tuple[int, str]:
@@ -146,17 +128,11 @@ def train_from_scratch(cfg_path: str):
         build_training_run(config, None)
     )
 
-    ddp_kwargs = DistributedDataParallelKwargs(
-        find_unused_parameters=True, broadcast_buffers=True, static_graph=True
-    )
-    # Initialize accelerator and tensorboard logging
-    accelerator, logger = init_accelerator_and_logger(
-        config=config,
-        # ddp_kwargs=ddp_kwargs,
-    )
+    # Initialize logger
+    logger = init_logger(config)
 
     # number of parameters
-    if accelerator.is_main_process:
+    if is_main_process():
         model_size = sum(p.numel() for p in model.parameters())
         trainable_size = sum(p.numel() for p in model.parameters() if p.requires_grad)
         logger.info("Starting training from scratch...")
@@ -176,7 +152,6 @@ def train_from_scratch(cfg_path: str):
 
     training_loop(
         config=config,
-        accelerator=accelerator,
         logger=logger,
         model=model,
         optimizer=opt,
@@ -204,18 +179,11 @@ def resume(project_dir: str):
         build_training_run(config, resume_dir)
     )
 
-    # Initialize accelerator and tensorboard logging
-    ddp_kwargs = DistributedDataParallelKwargs(
-        find_unused_parameters=True, broadcast_buffers=True, static_graph=True
-    )
-    # Initialize accelerator and tensorboard logging
-    accelerator, logger = init_accelerator_and_logger(
-        config=config,
-        # ddp_kwargs=ddp_kwargs,
-    )
+    # Initialize logger
+    logger = init_logger(config)
 
     # number of parameters
-    if accelerator.is_main_process:
+    if is_main_process():
         model_size = sum(p.numel() for p in model.parameters())
         trainable_size = sum(p.numel() for p in model.parameters() if p.requires_grad)
         logger.info(f"Resuming training from epoch {latest_epoch} in {resume_dir}...")
@@ -236,7 +204,6 @@ def resume(project_dir: str):
     # hand off to your existing loop
     training_loop(
         config=config,
-        accelerator=accelerator,
         logger=logger,
         model=model,
         optimizer=opt,
@@ -278,13 +245,15 @@ def parse():
     return args
 
 
-if __name__ == "__main__":
+def main():
     args = parse()
     try:
         if args.resume and os.path.exists(args.dir):
             # Resume training from checkpoint
+            init_distributed_mode()
             resume(args.dir)
         elif not args.resume and args.config and not args.dir:
+            init_distributed_mode()
             train_from_scratch(args.config)
         else:
             raise ValueError(
@@ -293,5 +262,8 @@ if __name__ == "__main__":
     except KeyboardInterrupt:
         print(f"Process {os.getpid()} received KeyboardInterrupt.")
     finally:
-        if dist.is_initialized():
-            dist.destroy_process_group()
+        cleanup()
+
+
+if __name__ == "__main__":
+    main()

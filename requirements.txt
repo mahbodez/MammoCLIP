@@ -2,7 +2,6 @@
 torch
 torchvision
 transformers
-accelerate
 tqdm
 numpy
 pandas
