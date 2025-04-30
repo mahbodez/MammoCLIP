@@ -1,23 +1,19 @@
 import re
 from typing import Tuple
 import torch
-from custom import (
-    MammoCLIP,
-    Config,
-)
 from torch.utils.data import DataLoader
 import os
-from utils.train_loop_utils import init_logger
-from utils.dist_utils import is_main_process, init_distributed_mode, cleanup
 from logging import Logger
 import argparse as ap
-from utils import (
-    build_model_and_optim,
-    prepare_dataloaders,
-    set_seed,
-    train_one_epoch,
-    eval_and_checkpoint,
-)
+
+from custom.model import MammoCLIP
+from custom.config import Config
+from utils.train_loop_utils import init_logger
+from utils.dist_utils import is_main_process, init_distributed_mode, cleanup
+from utils.model_utils import build_model_and_optim
+from utils.data_utils import prepare_dataloaders
+from utils.seed_utils import set_seed
+from utils.train_loop_utils import train_one_epoch, eval_and_checkpoint
 
 
 def training_loop(
@@ -248,12 +244,11 @@ def parse():
 def main():
     args = parse()
     try:
+        init_distributed_mode()
         if args.resume and os.path.exists(args.dir):
             # Resume training from checkpoint
-            init_distributed_mode()
             resume(args.dir)
         elif not args.resume and args.config and not args.dir:
-            init_distributed_mode()
             train_from_scratch(args.config)
         else:
             raise ValueError(

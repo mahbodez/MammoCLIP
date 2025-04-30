@@ -3,7 +3,7 @@ import torch
 import torch.nn as nn
 from tqdm.auto import tqdm
 from logging import Logger
-from custom import MammoCLIP
+from custom.model import MammoCLIP
 from .dist_utils import (
     is_dist_avail_and_initialized,
     reduce_tensor,

@@ -3,7 +3,7 @@ from tqdm.auto import tqdm
 import torch
 from .dist_utils import is_main_process, synchronize, get_rank
 from typing import Tuple, Dict
-from custom import Config
+from custom.config import Config
 from .stats import (
     get_gpu_memory_usage,
     get_gpu_power_usage,
@@ -93,12 +93,12 @@ def train_one_epoch(
         # log progress
         pbar.update(1 / grad_acc)
         pbar.set_postfix(
-            {"loss": loss.item(), "lr": scheduler.get_last_lr()[0], **gpu_stats}
+            {
+                "loss": loss.item() * grad_acc,
+                "lr": scheduler.get_last_lr()[0],
+                **gpu_stats,
+            }
         )
-        if is_main_process():
-            logger.info(
-                f"Step {opt_steps}/{total_steps} - loss: {loss.item():.4f} - lr: {scheduler.get_last_lr()[0]:.6f}"
-            )
 
     pbar.close()
     return opt_steps

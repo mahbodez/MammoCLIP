@@ -1,7 +1,6 @@
 import os
 import torch
 import torch.distributed as dist
-from logging import getLogger
 
 """
 Distributed utilities for PyTorch training.
@@ -10,8 +9,6 @@ This module provides helper functions to initialize and manage
 PyTorch distributed training, including setup, synchronization,
 tensor reduction, and gathering across processes.
 """
-
-log = getLogger(__name__)
 
 
 def is_dist_avail_and_initialized():
@@ -98,12 +95,21 @@ def init_distributed_mode(backend="nccl", init_method="env://"):
         local_rank = int(os.environ.get("LOCAL_RANK", 0))
         torch.cuda.set_device(local_rank)
         dist.init_process_group(
-            backend=backend, init_method=init_method, world_size=world_size, rank=rank
+            backend=backend,
+            init_method=init_method,
+            world_size=world_size,
+            rank=rank,
+        )
+        print(
+            f"[init] rank = {rank}, world_size = {world_size}, local_rank = {local_rank}, "
+            f"device = cuda:{local_rank}",
+            flush=True,
         )
         setup_for_distributed(rank == 0)
         dist.barrier()
+
     else:
-        log.warning(
+        raise RuntimeError(
             "Distributed training requires RANK and WORLD_SIZE environment variables to be set."
             "\nAre you forgetting to use torchrun or torch.distributed.launch?"
         )

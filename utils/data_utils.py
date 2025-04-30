@@ -2,8 +2,9 @@ import os
 import pandas as pd
 import numpy as np
 from torch.utils.data import DataLoader, DistributedSampler
-from custom import DistributedWeightedRandomSampler
-from custom import MammogramDataset, Config
+from custom.sampler import DistributedWeightedRandomSampler
+from custom.mammodata import MammogramDataset
+from custom.config import Config
 from .dist_utils import get_rank, get_world_size
 
 
@@ -70,12 +71,8 @@ def prepare_dataloaders(config: Config, resuming: bool = False):
     val_ds = MammogramDataset.from_dict(config.val_ds)
 
     # 3) samplers
-    train_sampler = _make_sampler(
-        train_ds, train_ds.get_weights(), len(train_ds), shuffle=True
-    )
-    val_sampler = _make_sampler(
-        val_ds, val_ds.get_weights(), len(val_ds), shuffle=False
-    )
+    train_sampler = _make_sampler(train_ds, train_ds.get_weights(), shuffle=True)
+    val_sampler = _make_sampler(val_ds, val_ds.get_weights(), shuffle=False)
 
     # 4) dataloaders
     bs = config.training_params["batch_size"]

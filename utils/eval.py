@@ -8,7 +8,8 @@ from sklearn.metrics import (
     confusion_matrix,
 )
 from torch.utils.data import DataLoader
-from custom import MammogramDataset, MammoCLIP
+from custom.mammodata import MammogramDataset
+from custom.model import MammoCLIP
 from tqdm.auto import tqdm
 
 

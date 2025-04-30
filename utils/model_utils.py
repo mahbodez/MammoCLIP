@@ -1,6 +1,7 @@
 import torch
 from transformers import get_wsd_schedule
-from custom import MammoCLIP, Config
+from custom.model import MammoCLIP
+from custom.config import Config
 from .stats import stats_from_epochs
 from .freezer import freeze_submodules
 from torch.nn.parallel import DistributedDataParallel as DDP
