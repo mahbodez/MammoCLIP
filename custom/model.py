@@ -1,3 +1,4 @@
+import os
 from transformers import VisionTextDualEncoderModel, VisionTextDualEncoderConfig
 import torch
 import torch.nn as nn
@@ -8,6 +9,8 @@ from transformers.models.clip.modeling_clip import clip_loss
 from .blocks import AttentionFusion, ViewEmbedding
 import logging
 from typing import Literal
+from safetensors.torch import load_file, save_file
+import json
 
 logger = logging.getLogger(__name__)
 
@@ -414,3 +417,89 @@ class MammoCLIP(VisionTextDualEncoderModel):
         )
 
         return model
+
+    @classmethod
+    def from_pretrained(
+        cls,
+        pretrained_model_name_or_path,
+    ):
+        """
+        Loads a pretrained model from a directory containing a safetensors file.
+
+        Args:
+            pretrained_model_name_or_path (str): Path to the directory containing the pretrained model's safetensors file.
+
+        Returns:
+            An instance of the model with weights loaded from the safetensors file.
+
+        Raises:
+            ValueError: If no safetensors file is found in the specified directory.
+
+        Notes:
+            - The method first creates an untrained model instance using the provided path.
+            - It then loads the weights from the safetensors file and applies them to the model.
+            - Warnings are logged if there are missing or unexpected keys in the state dictionary.
+        """
+        # find the safetensors file in the directory
+        safetensors_file = None
+        for file in os.listdir(pretrained_model_name_or_path):
+            if file.endswith(".safetensors"):
+                safetensors_file = os.path.join(pretrained_model_name_or_path, file)
+                break
+        if safetensors_file is None:
+            raise ValueError(
+                f"No safetensors file found in {pretrained_model_name_or_path}"
+            )
+        # load the config file
+        config_file = os.path.join(pretrained_model_name_or_path, "config.json")
+        if os.path.isfile(config_file):
+            with open(config_file, "r") as f:
+                config_dict = json.load(f)
+            # create the config object
+            config = MammoCLIPConfig.from_dict(config_dict)
+        else:
+            raise ValueError(f"No config file found in {pretrained_model_name_or_path}")
+        # create an untrained instance of the model,
+        # including the vision/text backbones from the saved config
+        vision_model = AutoModel.from_config(config.vision_config)
+        text_model = AutoModel.from_config(config.text_config)
+        instance = cls(config, vision_model=vision_model, text_model=text_model)
+        # now we need to load the weights from the safetensors file
+        state_dict = load_file(safetensors_file)
+        # apply the weights non‐strictly so we can log missing/unexpected
+        missing, unexpected = instance.load_state_dict(state_dict, strict=False)
+        if len(missing) > 0:
+            logger.warning(
+                f"Missing keys in state_dict: {missing}. This may be due to the model being untrained."
+            )
+        if len(unexpected) > 0:
+            logger.warning(
+                f"Unexpected keys in state_dict: {unexpected}. This may be due to the model being untrained."
+            )
+        # now we can return the model
+        return instance
+
+    def save_pretrained(self, save_directory: str):
+        """
+        Save the model's state_dict and configuration to a directory.
+        named `model.safetensors` and `config.json` respectively.
+
+        Args:
+            save_directory (str): The directory where the model and config will be saved, if it doesn't exist, it will be created.
+        """
+        if os.path.isfile(save_directory):
+            raise ValueError(
+                f"save_directory should be a directory, not a file: {save_directory}"
+            )
+        os.makedirs(save_directory, exist_ok=True)
+        model_path = os.path.join(save_directory, "model.safetensors")
+        config_path = os.path.join(save_directory, "config.json")
+        # save weights and config, raise on error
+        try:
+            save_file(self.state_dict(), model_path)
+            with open(config_path, "w") as f:
+                json.dump(self.config.to_dict(), f)
+        except Exception as e:
+            raise ValueError(f"Error saving model: {e}")
+
+        self._print(f"Model saved to {model_path} and config saved to {config_path}")
