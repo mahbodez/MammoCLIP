@@ -61,7 +61,7 @@ def build_model_and_optim(
 
     if is_dist_avail_and_initialized():
         rank = get_rank()
-        # model = model.to(rank)
+        model = model.to(rank)
         model = DDP(
             model,
             device_ids=[rank],
