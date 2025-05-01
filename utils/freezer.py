@@ -26,14 +26,14 @@ def freeze_params(model: nn.Module, freeze: bool = True) -> None:
 
 
 def freeze_submodules(
-    parent_model: nn.Module, submodules: List[nn.Module], freeze: bool = True
+    parent_model: nn.Module, submodules: List[str], freeze: bool = True
 ) -> None:
     """
     Freezes or unfreezes the parameters of specific submodules within a parent model.
 
     Args:
         parent_model (nn.Module): The parent model containing the submodules.
-        submodules (List[nn.Module]): List of submodules to be frozen/unfrozen.
+        submodules (List[str]): List of submodules to be frozen/unfrozen.
         freeze (bool, optional): If True, the specified submodules will be frozen.
             If False, they will be unfrozen. Defaults to True.
 
@@ -41,8 +41,8 @@ def freeze_submodules(
         None
     """
     for submodule in submodules:
-        if submodule in parent_model.children():
-            freeze_params(submodule, freeze)
+        if hasattr(parent_model, submodule):
+            freeze_params(getattr(parent_model, submodule), freeze)
         else:
             logger.error(
                 f"Submodule {submodule} is not a child of the parent model {parent_model}."

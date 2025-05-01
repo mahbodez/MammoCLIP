@@ -28,3 +28,7 @@ venv/
 **/__pycache__
 Thumbs.db
 .webui*
+
+#notebooks
+*.ipynb
+*.ipynb_checkpoints

@@ -63,12 +63,21 @@ def train_one_epoch(
     )
     gpu_stats = {}
     opt_steps = optimization_steps
-    model.train()
-    use_fp16 = config.training_params.get("mixed_precision") == "fp16"
-    scaler = GradScaler() if use_fp16 else None
+    # Mixed precision setting
+    mixed_precision = config.training_params.get("mixed_precision")
+    dtype = None
+    if mixed_precision is not None:
+        dtype = (
+            torch.float16
+            if mixed_precision == "fp16"
+            else torch.bfloat16 if mixed_precision == "bf16" else None
+        )
+    use_amp = dtype is not None
+    scaler = GradScaler() if use_amp else None
     # Don't forget to set_epoch for distributed sampler
     if hasattr(train_dl.sampler, "set_epoch"):
         train_dl.sampler.set_epoch(epoch)
+    model.train()
     synchronize()
     for i, batch in enumerate(train_dl):
         # Move batch to local rank GPU
@@ -76,7 +85,7 @@ def train_one_epoch(
             if isinstance(v, torch.Tensor):
                 batch[k] = v.to(gpu_id)
         # forward with optional autocast
-        with autocast(enabled=use_fp16, device_type="cuda"):
+        with autocast(enabled=use_amp, device_type="cuda", dtype=dtype):
             outputs = model(**batch, return_loss=True)
             loss = outputs.loss / grad_acc
         # backward, with scaling if fp16
