@@ -1,7 +1,7 @@
 csv_path: ./data/complete-mammo.csv
 dl_workers:
-  train: 0
-  val: 0
+  train: 1
+  val: 1
 eval_interval: 1
 freeze_text_model: true
 freeze_vision_model: false
