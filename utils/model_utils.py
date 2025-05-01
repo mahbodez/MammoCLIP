@@ -7,6 +7,7 @@ from .freezer import freeze_submodules
 from torch.nn.parallel import DistributedDataParallel as DDP
 from .dist_utils import get_rank, is_dist_avail_and_initialized
 from torch.distributed.optim import ZeroRedundancyOptimizer
+from torch.nn.parallel.distributed import _MixedPrecision
 
 
 def build_model_and_optim(
@@ -66,7 +67,6 @@ def build_model_and_optim(
             model,
             device_ids=[rank],
             **config.ddp_kwargs,
-            mixed_precision=config.training_params["mixed_precision"]
         )
 
     return model, optimizer, scheduler, stats, warmup, steady, total
