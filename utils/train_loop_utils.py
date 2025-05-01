@@ -1,6 +1,7 @@
 import os
 from tqdm.auto import tqdm
 import torch
+from torch.amp import autocast, GradScaler
 from .dist_utils import is_main_process, synchronize, get_rank
 from typing import Tuple, Dict
 from custom.config import Config
@@ -63,6 +64,8 @@ def train_one_epoch(
     gpu_stats = {}
     opt_steps = optimization_steps
     model.train()
+    use_fp16 = config.training_params.get("mixed_precision") == "fp16"
+    scaler = GradScaler() if use_fp16 else None
     # Don't forget to set_epoch for distributed sampler
     if hasattr(train_dl.sampler, "set_epoch"):
         train_dl.sampler.set_epoch(epoch)
@@ -72,17 +75,28 @@ def train_one_epoch(
         for k, v in batch.items():
             if isinstance(v, torch.Tensor):
                 batch[k] = v.to(gpu_id)
-        # forward
-        outputs = model(**batch, return_loss=True)
-        loss = outputs.loss / grad_acc
-        loss.backward()
+        # forward with optional autocast
+        with autocast(enabled=use_fp16, device_type="cuda"):
+            outputs = model(**batch, return_loss=True)
+            loss = outputs.loss / grad_acc
+        # backward, with scaling if fp16
+        if scaler is not None:
+            scaler.scale(loss).backward()
+        else:
+            loss.backward()
         # optimization step if gradient accumulation is done
         if (i + 1) % grad_acc == 0 or i == len(train_dl) - 1:
-            # gradient clipping
+            # gradient clipping and optimizer step
+            if scaler is not None:
+                scaler.unscale_(optimizer)
             torch.nn.utils.clip_grad_norm_(
                 model.parameters(), config.training_params.get("max_grad_norm", 1.0)
             )
-            optimizer.step()
+            if scaler is not None:
+                scaler.step(optimizer)
+                scaler.update()
+            else:
+                optimizer.step()
             scheduler.step()
             optimizer.zero_grad(set_to_none=True)
             opt_steps += 1
