@@ -24,7 +24,7 @@ def build_model_and_optim(
     if config.freeze_vision_model:
         freeze_submodules(model, [model.vision_model], True)
 
-    optimizer = torch.optim.AdamW(
+    optimizer = torch.optim.Adafactor(
         params=model.parameters(),
         lr=config.training_params["lr_max"],
         weight_decay=config.training_params["weight_decay"],
