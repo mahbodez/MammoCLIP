@@ -84,9 +84,8 @@ def train_one_epoch(
         for k, v in batch.items():
             if isinstance(v, torch.Tensor):
                 batch[k] = v.to(gpu_id)
-        # forward with optional autocast
-        # DEBUG -- log the batch stats
-        if logger is not None and i % 10 == 0:
+        # log the batch stats
+        if logger is not None and i % 1000 == 0:
             logger.info(
                 f"Batch {i}/{len(train_dl)} - "
                 f"Local rank {gpu_id} - "
@@ -94,7 +93,8 @@ def train_one_epoch(
                 f"Pixel values shape {batch['pixel_values'].shape} - "
                 f"Input IDs shape {batch['input_ids'].shape}"
             )
-        # END DEBUG
+        # END of logging
+        # forward with optional autocast
         with autocast(enabled=use_amp, device_type="cuda", dtype=dtype):
             outputs = model(**batch, return_loss=True)
             loss = outputs.loss / grad_acc
