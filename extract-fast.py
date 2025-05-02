@@ -12,7 +12,7 @@ from functools import partial
 import os
 import json
 from rich.console import Console
-from rich.prompt import Prompt
+from rich.prompt import Prompt, Confirm
 import threading
 
 console = Console()
@@ -98,7 +98,7 @@ def google_get_response(
     return response
 
 
-template = """
+template_birads = """
 You are a clinical natural language processing (NLP) assistant specialized in radiology report understanding.
 
 Extract the following fields from the mammogram report:
@@ -118,9 +118,33 @@ Make sure to return a JSON response. Do not include any other text or explanatio
 
 """
 
+template_composition = """
+You are a clinical natural language processing (NLP) assistant specialized in radiology report understanding.
+
+Extract the following fields from the mammogram report:
+
+- "composition": The breast composition category ("A", "B", "C", "D").
+
+Return a valid JSON with this key. 
+Only extract what is explicitly stated. 
+If uncertain or not mentioned, use "Z" as value. 
+Do not infer.
+
+Report:
+
+<report>
+{report}
+</report>
+
+Make sure to return a valid and parseable JSON response. Do not include any other text or explanation.
+"""
+
+template = template_composition
+keys = ["composition"]
+
 models = {
-    "openai-mini": "gpt-4.1-mini-2025-04-14",
-    "openai": "gpt-4.1-2025-04-14",
+    "openai-mini": "gpt-4.1-mini",
+    "openai": "gpt-4.1",
     "google": "models/gemini-2.0-flash",
 }
 
@@ -138,33 +162,27 @@ def extract_info(
         get_response = partial(
             openai_get_response, client=client, model=models[provider]
         )
-        tqdm.write(
-            f"{Fore.BLUE}[{thread_name}]{Style.RESET_ALL} Using {provider} model: {models[provider]}"
-        )
     elif "google" in provider:
         client = genai.Client(api_key=os.environ["GEMINI_API_KEY"])
         get_response = partial(
             google_get_response, client=client, model=models[provider]
         )
-        thread_name = threading.current_thread().name
-        tqdm.write(
-            f"{Fore.BLUE}[{thread_name}]{Style.RESET_ALL} Using {provider} model: {models[provider]}"
-        )
     else:
         raise ValueError(f"Unsupported provider: {provider}")
+    tqdm.write(
+        f"{Fore.BLUE}[{thread_name}]{Style.RESET_ALL} Using {provider} model: {models[provider]}"
+    )
 
     df = ref_df.copy(deep=True)
     # if the extracted cols are non-existent, create them
-    if "left_birads" not in df.columns:
-        df["left_birads"] = None
-    if "right_birads" not in df.columns:
-        df["right_birads"] = None
+    for key in keys:
+        if key not in df.columns:
+            df[key] = None
     # sample a subset of patients to extract
     conditions = (
         (df[report_col].notna())
-        & (df["left_birads"].isna())
-        & (df["right_birads"].isna())
-        & (df[report_col].str.strip().ne(""))
+        & (df[keys].isna()).all(axis=1)
+        & (df[report_col].astype(str).str.strip().ne(""))
         & (df["l_cc"].notna())
         & (df["r_cc"].notna())
         & (df["l_mlo"].notna())
@@ -184,7 +202,7 @@ def extract_info(
         )
     # ------ Sample n patients to extract ------
     tqdm.write(f"{Fore.BLUE}[{thread_name}] Extracting {n} patients")
-    indices = df.loc[conditions].sample(n=n, random_state=42, replace=False).index
+    indices = df.loc[conditions].sample(n=n, replace=False).index
     # ------ Extract the reports with tqdm (fixed position per thread) ------
     try:
         position = int(thread_name.replace("thread", ""))
@@ -205,8 +223,11 @@ def extract_info(
             response = get_response(prompt=prompt)
             response = dict(extract_json_from_response(response))
             # Try to fill in the extracted fields
-            df.at[index, "left_birads"] = response.get("left_birads")
-            df.at[index, "right_birads"] = response.get("right_birads")
+            for key in keys:
+                if key in response:
+                    df.at[index, key] = response[key]
+                else:
+                    continue
         except Exception as e:
             tqdm.write(f"{Fore.RED}[{thread_name}] Error: {str(e)[:50]}")
             continue
@@ -265,8 +286,9 @@ def multi_threaded_fill(
         combined_df = pd.concat(valid_results, ignore_index=False)
         # update
         for idx, row in combined_df.iterrows():
-            whole_df.at[idx, "left_birads"] = row["left_birads"]
-            whole_df.at[idx, "right_birads"] = row["right_birads"]
+            for key in keys:
+                if key in row and row[key] is not None:
+                    whole_df.at[idx, key] = row[key]
         # write out
         whole_df.to_csv(output_file, index=False)
         tqdm.write(f"{Fore.GREEN}Saved combined results to {output_file}")
@@ -276,10 +298,29 @@ def multi_threaded_fill(
 
 def main():
     ref_csv = Prompt.ask(
-        "Enter the path to the CSV file with the reports",
-        default="./data/extracted_info.csv",
+        "Enter the path to the source CSV file with the reports",
+        default="",
         console=console,
     )
+    dst_csv = Prompt.ask(
+        "Enter the path to the destination CSV file",
+        default="same",
+        console=console,
+    )
+    if dst_csv == "same":
+        dst_csv = ref_csv
+    if not os.path.exists(ref_csv):
+        raise FileNotFoundError(f"File not found: {ref_csv}")
+    if not os.path.exists(dst_csv):
+        raise FileNotFoundError(f"File not found: {dst_csv}")
+    if not Confirm(
+        prompt="Do you want to overwrite the source file?",
+        console=console,
+    ):
+        console.clear()
+        main()
+        return
+
     report_col = Prompt.ask(
         "Enter the name of the report column",
         default="report",
@@ -287,7 +328,7 @@ def main():
     )
     number_of_threads = Prompt.ask(
         "Enter the number of threads to use for extraction",
-        default=1,
+        default="10",
         console=console,
     )
     number_of_threads = int(number_of_threads)
@@ -307,7 +348,8 @@ def main():
 
     provider = Prompt.ask(
         "Enter the provider to use for extraction (openai-mini, openai, google)",
-        default="openai-mini",
+        default=list(models.keys())[0],
+        choices=list(models.keys()),
         console=console,
     )
     if provider not in models:
@@ -315,7 +357,7 @@ def main():
 
     multi_threaded_fill(
         ref_df=pd.read_csv(ref_csv),
-        output_file=ref_csv,
+        output_file=dst_csv,
         report_col=report_col,
         total_number_to_extract=total_number_to_extract,
         number_of_threads=number_of_threads,

@@ -304,14 +304,16 @@ def multi_threaded_fill(
 def main():
     ref_csv = Prompt.ask(
         "Enter the path to the CSV file with the reports",
-        default="./data/mammo-aug-oai-08-ggl-05.csv",
+        default="",
         console=console,
     )
     dest_csv = Prompt.ask(
         "Enter the path to save the augmented CSV file",
-        default="./data/mammo-aug-oai-08-ggl-05.csv",
+        default="same as above",
         console=console,
     )
+    if dest_csv == "same as above":
+        dest_csv = ref_csv
 
     if not ref_csv.endswith(".csv"):
         raise ValueError("The reference CSV file must have a .csv extension")
@@ -346,7 +348,7 @@ def main():
         )
     number_of_threads = Prompt.ask(
         "Enter the number of threads to use for augmentation",
-        default=1,
+        default=10,
         console=console,
     )
     number_of_threads = int(number_of_threads)

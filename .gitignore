@@ -1,6 +1,6 @@
 .cache/
 .pytest_cache/
-data/
+data
 mammoclip-v1/
 __pycache__/
 *.py[cod]
