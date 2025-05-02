@@ -1,13 +1,13 @@
 csv_path: ./data/complete-mammo.csv
 dl_workers:
-  train: 1
+  train: 2
   val: 1
 eval_interval: 1
 freeze_text_model: true
 freeze_vision_model: false
 ddp_kwargs:
   find_unused_parameters: true
-max_checkpoints: 5
+max_checkpoints: 4
 pretrained_model_cfg:
   fusion_type: linear
   num_views: 4
@@ -72,13 +72,13 @@ train_ds:
     weights_col: weight
   class_: MammogramDataset
 training_params:
-  batch_size: 5
-  gradient_accumulation_steps: 8
+  batch_size: 6
+  gradient_accumulation_steps: 4
   lr_max: 5.0e-05
   lr_min: 5.0e-07
   lr_scheduler: wsd_schedule
   max_grad_norm: 1.0
-  mixed_precision: fp16
+  mixed_precision: bf16
   num_epochs: 100
   steady_fraction: 0.25
   train_fraction: 0.8
