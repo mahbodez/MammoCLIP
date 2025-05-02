@@ -87,7 +87,7 @@ def train_one_epoch(
         # forward with optional autocast
         # DEBUG -- log the batch stats
         if logger is not None and i % 10 == 0:
-            logger.debug(
+            logger.info(
                 f"Batch {i}/{len(train_dl)} - "
                 f"Local rank {gpu_id} - "
                 f"Batch size {batch['pixel_values'].shape[0]} - "
