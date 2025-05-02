@@ -26,12 +26,19 @@ def build_model_and_optim(
     if config.freeze_vision_model:
         freeze_submodules(model, ["vision_model"], True)
 
-    optimizer = ZeroRedundancyOptimizer(
-        params=[p for p in model.parameters() if p.requires_grad],
-        optimizer_class=torch.optim.Adafactor,
-        lr=config.training_params["lr_max"],
-        weight_decay=config.training_params["weight_decay"],
-    )
+    if is_dist_avail_and_initialized():
+        optimizer = ZeroRedundancyOptimizer(
+            params=[p for p in model.parameters() if p.requires_grad],
+            optimizer_class=torch.optim.Adafactor,
+            lr=config.training_params["lr_max"],
+            weight_decay=config.training_params["weight_decay"],
+        )
+    else:
+        optimizer = torch.optim.Adafactor(
+            model.parameters(),
+            lr=config.training_params["lr_max"],
+            weight_decay=config.training_params["weight_decay"],
+        )
 
     stats = stats_from_epochs(
         num_epochs=config.training_params["num_epochs"],
