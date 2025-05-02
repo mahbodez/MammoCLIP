@@ -15,7 +15,7 @@ def build_model_and_optim(
 ) -> tuple:
     if resume_from is not None:
         # resume training
-        model = MammoCLIP.from_pretrained(resume_from)
+        model = MammoCLIP.from_pretrained(resume_from, **config.pretrained_model_cfg)
     else:
         # from scratch
         model = MammoCLIP.from_vision_text_pretrained(**config.pretrained_model_cfg)
@@ -60,9 +60,9 @@ def build_model_and_optim(
         / config.training_params["lr_max"],
     )
 
+    rank = get_rank()
+    model = model.to(rank)
     if is_dist_avail_and_initialized():
-        rank = get_rank()
-        model = model.to(rank)
         model = DDP(
             model,
             device_ids=[rank],

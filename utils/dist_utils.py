@@ -109,7 +109,7 @@ def init_distributed_mode(backend="nccl", init_method="env://"):
         dist.barrier()
 
     else:
-        raise RuntimeError(
+        print(
             "Distributed training requires RANK and WORLD_SIZE environment variables to be set."
             "\nAre you forgetting to use torchrun or torch.distributed.launch?"
         )

@@ -422,6 +422,10 @@ class MammoCLIP(VisionTextDualEncoderModel):
     def from_pretrained(
         cls,
         pretrained_model_name_or_path,
+        vision_model_name_or_path=None,
+        text_model_name_or_path=None,
+        *model_args,
+        **kwargs,
     ):
         """
         Loads a pretrained model from a directory containing a safetensors file.
@@ -450,20 +454,12 @@ class MammoCLIP(VisionTextDualEncoderModel):
             raise ValueError(
                 f"No safetensors file found in {pretrained_model_name_or_path}"
             )
-        # load the config file
-        config_file = os.path.join(pretrained_model_name_or_path, "config.json")
-        if os.path.isfile(config_file):
-            with open(config_file, "r") as f:
-                config_dict = json.load(f)
-            # create the config object
-            config = MammoCLIPConfig.from_dict(config_dict)
-        else:
-            raise ValueError(f"No config file found in {pretrained_model_name_or_path}")
-        # create an untrained instance of the model,
-        # including the vision/text backbones from the saved config
-        vision_model = AutoModel.from_config(config.vision_config)
-        text_model = AutoModel.from_config(config.text_config)
-        instance = cls(config, vision_model=vision_model, text_model=text_model)
+        instance = cls.from_vision_text_pretrained(
+            vision_model_name_or_path=vision_model_name_or_path,
+            text_model_name_or_path=text_model_name_or_path,
+            *model_args,
+            **kwargs,
+        )
         # now we need to load the weights from the safetensors file
         state_dict = load_file(safetensors_file)
         # apply the weights non‐strictly so we can log missing/unexpected
