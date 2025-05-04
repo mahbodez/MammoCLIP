@@ -1,0 +1,102 @@
+templates:
+  composition:
+    prompt: |
+      You are a clinical natural language processing (NLP) assistant specialized in radiology report understanding.
+
+      Extract the following fields from the mammogram report:
+
+      - "composition": The breast composition category ("A", "B", "C", "D").
+
+      Return a JSON with the above key. 
+      Only extract what is explicitly stated. 
+      If uncertain or not mentioned, use "Z" as value. 
+      Do not infer.
+
+      Report:
+
+      <report>
+      {report}
+      </report>
+
+      Make sure to return a valid and parseable JSON response. Do not include any other text or explanation.
+    keys:
+      - composition
+  birads:
+    prompt: |
+      You are a clinical natural language processing (NLP) assistant specialized in radiology report understanding.
+
+      Extract the following fields from the mammogram report:
+
+      - "left_birads": BI-RADS score for the left breast (0–6 or -1), ignore characters like 'a' or 'b' or 'c'.
+      - "right_birads": BI-RADS score for the right breast (0–6 or -1), ignore characters like 'a' or 'b' or 'c'.
+
+      Return a JSON with the above keys. 
+      Only extract what is explicitly stated. 
+      If uncertain or not mentioned, use -1. 
+      Do not infer.
+
+      Report:
+
+      <report>
+      {report}
+      </report>
+
+      Make sure to return a valid and parseable JSON response. Do not include any other text or explanation.
+    keys:
+      - left_birads
+      - right_birads
+  microcal:
+    prompt: |
+      You are a clinical natural language processing (NLP) assistant specialized in radiology report understanding.
+
+      Extract the following fields from the mammogram report:
+
+      - "left_microcal": Presence of microcalcifications anywhere in the left breast (0 for absence and 1 for presence).
+      - "right_microcal": Presence of microcalcifications anywhere in the right breast (0 for absence and 1 for presence).
+
+      Return a JSON with the above keys. 
+      Only extract what is explicitly stated. 
+      If uncertain or not mentioned, use -1.
+      Do not infer.
+
+      Report:
+
+      <report>
+      {report}
+      </report>
+
+      Make sure to return a valid and parseable JSON response. Do not include any other text or explanation.
+    keys:
+      - left_microcal
+      - right_microcal
+  mass:
+    prompt: |
+      You are a clinical natural language processing (NLP) assistant specialized in radiology report understanding.
+
+      Extract the following fields from the mammogram report:
+
+      - "left_mass": Presence of mass anywhere in the left breast (0 for absence and 1 for presence).
+      - "right_mass": Presence of mass anywhere in the right breast (0 for absence and 1 for presence).
+        
+      Return a JSON with the above keys.
+      Only extract what is explicitly stated.
+      If uncertain or not mentioned, use -1.
+      Do not infer.
+
+      Report:
+      <report>
+      {report}
+      </report>
+
+      Make sure to return a valid and parseable JSON response. Do not include any other text or explanation.
+    keys:
+      - left_mass
+      - right_mass
+
+models:
+  gpt-4.1:
+    provider: openai
+  gpt-4.1-mini:
+    provider: openai
+  models/gemini-2.0-flash:
+    provider: google
