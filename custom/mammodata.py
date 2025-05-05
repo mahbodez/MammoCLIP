@@ -291,9 +291,9 @@ class MammogramDataset(Dataset, Dictable):
         # Tokenization
         if self.tokenizer:
             output = self.tokenizer(text, **self.tokenizer_kwargs)
-            output["input_ids"] = output["input_ids"].squeeze(0)
-            output["attention_mask"] = output["attention_mask"].squeeze(0)
-            output["token_type_ids"] = output["token_type_ids"].squeeze(0)
+            for k, v in output.items():
+                if isinstance(v, torch.Tensor):
+                    output[k] = v.squeeze(0)
         else:
             token_ids = torch.tensor([0], dtype=torch.long)
             output["input_ids"] = token_ids

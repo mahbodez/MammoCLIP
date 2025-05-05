@@ -1,7 +1,7 @@
 .cache/
 .pytest_cache/
 data
-mammoclip-v1/
+mammoclip-v**
 __pycache__/
 *.py[cod]
 *$py.class
