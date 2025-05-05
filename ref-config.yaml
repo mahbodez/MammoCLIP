@@ -1,7 +1,7 @@
-csv_path: ./data/complete-mammo.csv
+csv_path: ./data/essential-mammo.csv
 dl_workers:
   train: 2
-  val: 1
+  val: 2
 eval_interval: 1
 freeze_text_model: true
 freeze_vision_model: false
@@ -9,19 +9,20 @@ ddp_kwargs:
   find_unused_parameters: true
 max_checkpoints: 4
 pretrained_model_cfg:
-  fusion_type: linear
+  fusion_type: attention
   num_views: 4
   text_model_name_or_path: microsoft/BiomedVLP-CXR-BERT-general
   verbose: false
   vision_model_name_or_path: microsoft/rad-dino
-project_dir: ./mammoclip-v1
+project_dir: ./mammoclip-v2
 save_interval: 1
 seed: 42
 train_ds:
   attrs_:
     alt_text_cols:
       - aug_report
-    alt_text_prob: 0.5
+      - aug_report02
+    alt_text_prob: 0.66
     cache_dir: .cache
     image_cols:
       - r_cc
@@ -36,7 +37,7 @@ train_ds:
           - 518
         use_clahe: true
       class_: MammogramPreprocessor
-    path_to_df: ./mammoclip-v1/train.csv
+    path_to_df: ./mammoclip-v2/train.csv
     pid_col: id
     text_col: report
     tokenizer: microsoft/BiomedVLP-CXR-BERT-general
@@ -58,8 +59,10 @@ train_ds:
           - 0.9
           - 1.1
         shear:
-          - 10
-          - 10
+          - -5
+          - 5
+          - -5
+          - 5
         size:
           - 518
           - 518
@@ -112,26 +115,28 @@ val_ds:
       truncation: true
     transform_function:
       attrs_:
-        degrees: 10
+        degrees: 0
         is_validation: true
         mean:
           - 0.281
         noise_std:
           - 0.0
-          - 0.02
+          - 0.0
         scale:
-          - 0.9
-          - 1.1
+          - 1.0
+          - 1.0
         shear:
-          - 20
-          - 20
+          - 0
+          - 0
+          - 0
+          - 0
         size:
           - 518
           - 518
         std:
           - 0.217
         translate:
-          - 0.05
-          - 0.05
+          - 0.0
+          - 0.0
       class_: MammogramTransform
   class_: MammogramDataset
