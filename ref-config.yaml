@@ -87,6 +87,7 @@ training_params:
   train_fraction: 0.8
   warmup_fraction: 0.05
   weight_decay: 1.0e-06
+  optimizer: adamw
 val_ds:
   attrs_:
     alt_text_prob: 0.0

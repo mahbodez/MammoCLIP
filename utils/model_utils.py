@@ -26,16 +26,26 @@ def build_model_and_optim(
     if config.freeze_vision_model:
         freeze_submodules(model, ["vision_model"], True)
 
+    optimizer_cls = {
+        "sgd": torch.optim.SGD,
+        "rmsprop": torch.optim.RMSprop,
+        "adagrad": torch.optim.Adagrad,
+        "adafactor": torch.optim.Adafactor,
+        "adam": torch.optim.Adam,
+        "adamw": torch.optim.AdamW,
+        "adamax": torch.optim.Adamax,
+    }.get(config.training_params["optimizer"].lower(), torch.optim.AdamW)
+
     if is_dist_avail_and_initialized():
         optimizer = ZeroRedundancyOptimizer(
-            params=[p for p in model.parameters() if p.requires_grad],
-            optimizer_class=torch.optim.Adafactor,
+            params=model.parameters(),
+            optimizer_class=optimizer_cls,
             lr=config.training_params["lr_max"],
             weight_decay=config.training_params["weight_decay"],
         )
     else:
-        optimizer = torch.optim.Adafactor(
-            model.parameters(),
+        optimizer = optimizer_cls(
+            params=model.parameters(),
             lr=config.training_params["lr_max"],
             weight_decay=config.training_params["weight_decay"],
         )
