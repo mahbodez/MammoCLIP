@@ -8,6 +8,7 @@ from torch.nn.parallel import DistributedDataParallel as DDP
 from .dist_utils import get_rank, is_dist_avail_and_initialized
 from torch.distributed.optim import ZeroRedundancyOptimizer
 from torch.nn.parallel.distributed import _MixedPrecision
+from .dist_utils import get_world_size
 
 
 def build_model_and_optim(
@@ -58,15 +59,23 @@ def build_model_and_optim(
         dataset_size=dataset_size,
     )
 
-    warmup = int(
-        stats["total_optimization_steps"] * config.training_params["warmup_fraction"]
+    warmup = (
+        int(
+            stats["total_optimization_steps"]
+            * config.training_params["warmup_fraction"]
+        )
+        // get_world_size()
     )
     warmup = 0 if resume_from else warmup
-    steady = int(
-        stats["total_optimization_steps"] * config.training_params["steady_fraction"]
+    steady = (
+        int(
+            stats["total_optimization_steps"]
+            * config.training_params["steady_fraction"]
+        )
+        // get_world_size()
     )
     steady = 0 if resume_from else steady
-    total = stats["total_optimization_steps"]
+    total = stats["total_optimization_steps"] // get_world_size()
 
     scheduler = get_wsd_schedule(
         optimizer,
