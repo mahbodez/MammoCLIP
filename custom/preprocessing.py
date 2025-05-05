@@ -20,9 +20,9 @@ class MammogramPreprocessor(Dictable):
 
     def __init__(
         self,
-        output_size=(384, 384),
-        extract_largest_cc=True,
-        use_clahe=True,
+        output_size: Tuple[int, int],
+        extract_largest_cc: bool = True,
+        use_clahe: bool = True,
         *args,
         **kwargs
     ):
@@ -128,11 +128,7 @@ class GaussianNoise(Dictable):
     """
 
     def __init__(
-        self,
-        mean: float = 0.0,
-        std: Tuple[float, float] = (0.01, 0.03),
-        *args,
-        **kwargs
+        self, mean: float = 0.0, std: Tuple[float, float] = (0.0, 0.0), *args, **kwargs
     ):
         """
         Args:
@@ -183,14 +179,14 @@ class MammogramTransform(Dictable):
 
     def __init__(
         self,
-        size: Tuple[int, int] = (384, 384),
-        degrees: int = 15,
-        translate: Tuple[float, float] = (0.1, 0.1),
-        scale: Tuple[float, float] = (0.9, 1.1),
+        size: Tuple[int, int],
+        degrees: int = 0,
+        translate: Tuple[float, float] = (0, 0),
+        scale: Tuple[float, float] = (1, 1),
         shear: Tuple = (0, 0, 0, 0),
-        mean: Tuple[float] = (0.5,),
-        std: Tuple[float] = (0.5,),
-        noise_std: Tuple[float, float] = (0.01, 0.03),
+        mean: Tuple[float] = (0.25,),
+        std: Tuple[float] = (0.25,),
+        noise_std: Tuple[float, float] = (0.0, 0.0),
         is_validation: bool = False,
         *args,
         **kwargs
