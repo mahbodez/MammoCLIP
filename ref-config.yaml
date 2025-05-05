@@ -91,6 +91,7 @@ training_params:
 val_ds:
   attrs_:
     alt_text_prob: 0.0
+    weights_col: weight
     cache_dir: .cache
     image_cols:
       - r_cc
