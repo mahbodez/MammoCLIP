@@ -20,7 +20,7 @@ class MammogramPreprocessor(Dictable):
 
     def __init__(
         self,
-        output_size: Tuple[int, int],
+        output_size: Tuple[int],
         extract_largest_cc: bool = True,
         use_clahe: bool = True,
         *args,
@@ -128,12 +128,12 @@ class GaussianNoise(Dictable):
     """
 
     def __init__(
-        self, mean: float = 0.0, std: Tuple[float, float] = (0.0, 0.0), *args, **kwargs
+        self, mean: float = 0.0, std: Tuple[float] = (0.0, 0.0), *args, **kwargs
     ):
         """
         Args:
             mean (float): Mean of the Gaussian noise.
-            std (tuple): Standard deviation of the Gaussian noise.
+            std (tuple): Standard deviation range of the Gaussian noise.
         """
         if not isinstance(std, (tuple, list)) or len(std) != 2:
             raise ValueError("std must be a tuple/list of (min_std, max_std).")
@@ -173,24 +173,32 @@ class GaussianNoise(Dictable):
 
 
 class MammogramTransform(Dictable):
-    """
-    Modular and robust augmentation pipeline using Torchvision.
-    """
-
     def __init__(
         self,
-        size: Tuple[int, int],
+        size: Tuple[int],
         degrees: int = 0,
-        translate: Tuple[float, float] = (0, 0),
-        scale: Tuple[float, float] = (1, 1),
+        translate: Tuple[float] = (0, 0),
+        scale: Tuple[float] = (1, 1),
         shear: Tuple = (0, 0, 0, 0),
         mean: Tuple[float] = (0.25,),
         std: Tuple[float] = (0.25,),
-        noise_std: Tuple[float, float] = (0.0, 0.0),
+        noise_std: Tuple[float] = (0.0, 0.0),
         is_validation: bool = False,
         *args,
         **kwargs
     ):
+        """
+        Args:
+            size (tuple): Desired output size for images, e.g., (height, width).
+            degrees (int): Degrees for random affine transformation, e.g., 15.
+            translate (tuple): Translation for random affine transformation, e.g., (h, v).
+            scale (tuple): Scale for random affine transformation, e.g., (0.8, 1.2).
+            shear (tuple): Shear for random affine transformation, e.g., (x_min, x_max, y_min, y_max).
+            mean (tuple): Mean for normalization.
+            std (tuple): Standard deviation for normalization.
+            noise_std (tuple): Standard deviation range for Gaussian noise, e.g., (0.0, 0.01).
+            is_validation (bool): Whether the transform is for validation.
+        """
         self.size = size
         self.degrees = degrees
         self.translate = translate
