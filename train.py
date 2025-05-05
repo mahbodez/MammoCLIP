@@ -35,6 +35,8 @@ def training_loop(
     opt_steps = 0.0
     total_steps = stats["total_optimization_steps"]
 
+    best_metric = float("inf")
+
     # Now you train the model
     for epoch in range(
         starting_epoch, config.training_params["num_epochs"] + starting_epoch
@@ -52,7 +54,7 @@ def training_loop(
             optimization_steps=opt_steps,
         )
 
-        eval_and_checkpoint(
+        best_metric = eval_and_checkpoint(
             epoch=epoch,
             config=config,
             model=model,
@@ -60,6 +62,7 @@ def training_loop(
             logger=logger,
             resuming=resuming,
             optimization_steps=opt_steps,
+            best_metric=best_metric,
         )
     torch.cuda.empty_cache()
 

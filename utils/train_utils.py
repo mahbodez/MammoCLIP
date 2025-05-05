@@ -21,6 +21,7 @@ def cleanup_checkpoints(
     (and if you passed "xxx_resumed", also cleans "xxx_<num>")
     keeping only the newest max_checkpoints per prefix.
     """
+    max_checkpoints = max(1, max_checkpoints)  # at least keep one checkpoint
     # build list of prefixes to clean
     prefixes = [prefix]
     if prefix.endswith("_resumed"):

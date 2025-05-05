@@ -145,14 +145,35 @@ def eval_and_checkpoint(
     logger: Logger,
     resuming: bool,
     optimization_steps: float,
+    best_metric: float = float("inf"),
 ):
     # evaluation
+    metric = None
     if (epoch + 1) % config.eval_interval == 0:
-        evaluate(model, val_dl, logger, int(optimization_steps))
+        metric = evaluate(model, val_dl, logger, int(optimization_steps))
     # synchronize processes before saving
     synchronize()
     if is_main_process():
         last = epoch == config.training_params["num_epochs"] - 1
+        # if best metric is lower than current metric, save the model
+        # regardless of the epoch
+        if metric is not None:
+            if metric < best_metric:
+                best_metric = metric
+                logger.info(f"New best metric: {best_metric}")
+                # save the model
+                prefix = "model_best"
+                cleanup_checkpoints(config.project_dir, prefix, 1, logger)
+                # if wrapped in DDP, unwrap
+                base_model = model.module if hasattr(model, "module") else model
+                save_checkpoint(
+                    base_model,
+                    config.project_dir,
+                    prefix,
+                    epoch + 1,
+                    logger,
+                )
+        # save the model every save_interval epochs
         if ((epoch + 1) % config.save_interval == 0) or last:
             prefix = "model_resumed" if resuming else "model"
             cleanup_checkpoints(
@@ -169,3 +190,4 @@ def eval_and_checkpoint(
             )
             if not resuming:
                 config.to_yaml(os.path.join(config.project_dir, "config.yaml"))
+    return best_metric
