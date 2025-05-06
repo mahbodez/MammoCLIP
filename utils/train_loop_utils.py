@@ -54,10 +54,9 @@ def train_one_epoch(
     optimization_steps: float = 0.0,
 ) -> float:
     gpu_id = get_rank()
-    n_gpus = get_world_size()
     grad_acc = config.training_params.get("gradient_accumulation_steps", 1)
     pbar = tqdm(
-        total=len(train_dl) / grad_acc / n_gpus,
+        total=len(train_dl) / grad_acc,
         disable=not is_main_process(),
         desc=f"Epoch {epoch+1}/{starting_epoch+config.training_params['num_epochs']}",
         leave=False,
