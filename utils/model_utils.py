@@ -42,13 +42,13 @@ def build_model_and_optim(
             params=model.parameters(),
             optimizer_class=optimizer_cls,
             lr=config.training_params["lr_max"],
-            weight_decay=config.training_params["weight_decay"],
+            **config.training_params["optimizer_kwargs"],
         )
     else:
         optimizer = optimizer_cls(
             params=model.parameters(),
             lr=config.training_params["lr_max"],
-            weight_decay=config.training_params["weight_decay"],
+            **config.training_params["optimizer_kwargs"],
         )
 
     stats = stats_from_epochs(

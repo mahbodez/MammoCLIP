@@ -77,17 +77,18 @@ train_ds:
 training_params:
   batch_size: 8
   gradient_accumulation_steps: 4
-  lr_max: 5.0e-05
-  lr_min: 5.0e-07
+  lr_max: 1.0e-04
+  lr_min: 1.0e-06
   lr_scheduler: wsd_schedule
   max_grad_norm: 1.0
   mixed_precision: bf16
   num_epochs: 50
-  steady_fraction: 0.25
+  steady_fraction: 0.05
   train_fraction: 0.8
   warmup_fraction: 0.05
-  weight_decay: 1.0e-5
   optimizer: adafactor
+  optimizer_kwargs:
+    weight_decay: 1.0e-03
 val_ds:
   attrs_:
     alt_text_prob: 0.0

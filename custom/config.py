@@ -36,7 +36,9 @@ class Config:
             gradient_accumulation_steps=2,
             max_grad_norm=1.0,
             optimizer="adamw",
-            weight_decay=1e-6,
+            optimizer_kwargs=dict(
+                weight_decay=1e-6,
+            ),
             mixed_precision="bf16",
         )
     )
