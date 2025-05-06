@@ -49,7 +49,6 @@ def training_loop(
             scheduler=scheduler,
             train_dl=train_dl,
             logger=logger,
-            total_steps=total_steps,
             starting_epoch=starting_epoch,
             optimization_steps=opt_steps,
         )
