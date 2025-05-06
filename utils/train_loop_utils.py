@@ -50,7 +50,6 @@ def train_one_epoch(
     config: Config,
     epoch: int,
     logger: Logger | None,
-    total_steps: int,
     starting_epoch: int,
     optimization_steps: float = 0.0,
 ) -> float:
@@ -60,6 +59,9 @@ def train_one_epoch(
         total=len(train_dl) / grad_acc,
         disable=not is_main_process(),
         desc=f"Epoch {epoch+1}/{starting_epoch+config.training_params['num_epochs']}",
+        leave=False,
+        dynamic_ncols=True,
+        colour="green",
     )
     gpu_stats = {}
     opt_steps = optimization_steps
@@ -85,9 +87,8 @@ def train_one_epoch(
             if isinstance(v, torch.Tensor):
                 batch[k] = v.to(gpu_id)
         # log the batch stats
-        if logger is not None and i % 1000 == 0:
+        if logger is not None and i == 0:
             logger.info(
-                f"Batch {i}/{len(train_dl)} - "
                 f"Local rank {gpu_id} - "
                 f"Batch size {batch['pixel_values'].shape[0]} - "
                 f"Pixel values shape {batch['pixel_values'].shape} - "
@@ -98,7 +99,7 @@ def train_one_epoch(
         with autocast(enabled=use_amp, device_type="cuda", dtype=dtype):
             outputs = model(**batch, return_loss=True)
             loss = outputs.loss / grad_acc
-        # backward, with scaling if fp16
+        # backward, with scaling if fp16/bf16
         if scaler is not None:
             scaler.scale(loss).backward()
         else:
