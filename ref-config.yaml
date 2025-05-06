@@ -9,7 +9,7 @@ ddp_kwargs:
   find_unused_parameters: true
 max_checkpoints: 4
 pretrained_model_cfg:
-  fusion_type: attention
+  fusion_type: linear
   num_views: 4
   text_model_name_or_path: microsoft/BiomedVLP-CXR-BERT-general
   verbose: false
@@ -56,13 +56,13 @@ train_ds:
           - 0.0
           - 0.02
         scale:
-          - 0.9
-          - 1.1
+          - 0.8
+          - 1.2
         shear:
-          - -5
-          - 5
-          - -5
-          - 5
+          - -10
+          - 10
+          - -10
+          - 10
         size:
           - 518
           - 518
@@ -75,19 +75,19 @@ train_ds:
     weights_col: weight
   class_: MammogramDataset
 training_params:
-  batch_size: 6
+  batch_size: 8
   gradient_accumulation_steps: 4
   lr_max: 5.0e-05
   lr_min: 5.0e-07
   lr_scheduler: wsd_schedule
   max_grad_norm: 1.0
   mixed_precision: bf16
-  num_epochs: 100
+  num_epochs: 50
   steady_fraction: 0.25
   train_fraction: 0.8
   warmup_fraction: 0.05
-  weight_decay: 1.0e-06
-  optimizer: adamw
+  weight_decay: 1.0e-5
+  optimizer: adafactor
 val_ds:
   attrs_:
     alt_text_prob: 0.0
