@@ -2,7 +2,7 @@ import os
 from tqdm.auto import tqdm
 import torch
 from torch.amp import autocast, GradScaler
-from .dist_utils import is_main_process, synchronize, get_rank
+from .dist_utils import is_main_process, synchronize, get_rank, get_world_size
 from typing import Tuple, Dict
 from custom.config import Config
 from .stats import (
@@ -54,9 +54,10 @@ def train_one_epoch(
     optimization_steps: float = 0.0,
 ) -> float:
     gpu_id = get_rank()
+    n_gpus = get_world_size()
     grad_acc = config.training_params.get("gradient_accumulation_steps", 1)
     pbar = tqdm(
-        total=len(train_dl) / grad_acc,
+        total=len(train_dl) / grad_acc / n_gpus,
         disable=not is_main_process(),
         desc=f"Epoch {epoch+1}/{starting_epoch+config.training_params['num_epochs']}",
         leave=False,

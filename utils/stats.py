@@ -37,7 +37,9 @@ def stats_from_epochs(
     effective_batch_size = per_gpu_batch_size * num_gpus * accumulation_steps
 
     # batches per epoch seen by each process (GPU)
-    batches_per_device_per_epoch = math.ceil(dataset_size / per_gpu_batch_size)
+    batches_per_device_per_epoch = (
+        math.ceil(dataset_size / per_gpu_batch_size) // num_gpus
+    )
 
     # total forward/backward passes (batches) across all epochs, per process
     total_batches = batches_per_device_per_epoch * num_epochs
