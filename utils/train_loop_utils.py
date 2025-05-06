@@ -17,6 +17,7 @@ from .train_utils import (
     evaluate,
 )
 from logging import Logger
+from torch.utils.tensorboard import SummaryWriter
 
 
 def init_logger(config: Config) -> Logger:
@@ -32,6 +33,18 @@ def init_logger(config: Config) -> Logger:
             log_to_file=os.path.join(config.project_dir, "logs", "train.log"),
         )
     return logger
+
+
+def init_tensorboard(config: Config) -> SummaryWriter | None:
+    """
+    Initialize TensorBoard writer on main process.
+    """
+    tb_writer = None
+    if is_main_process():
+        path = os.path.join(config.project_dir, "logs", "tensorboard")
+        os.makedirs(path, exist_ok=True)
+        tb_writer = SummaryWriter(log_dir=path)
+    return tb_writer
 
 
 def poll_gpu_stats() -> Dict[str, float]:
@@ -50,6 +63,7 @@ def train_one_epoch(
     config: Config,
     epoch: int,
     logger: Logger | None,
+    tb_writer: SummaryWriter | None,
     starting_epoch: int,
     optimization_steps: float = 0.0,
 ) -> float:
@@ -124,6 +138,21 @@ def train_one_epoch(
             if is_main_process() and opt_steps % 10 == 0:
                 gpu_stats = poll_gpu_stats()
 
+            # log into tensorboard
+            if is_main_process():
+                tb_writer.add_scalar(
+                    "train/loss",
+                    loss.item() * grad_acc,
+                    global_step=opt_steps,
+                )
+                tb_writer.add_scalar(
+                    "train/lr",
+                    scheduler.get_last_lr()[0],
+                    global_step=opt_steps,
+                )
+                for k, v in gpu_stats.items():
+                    tb_writer.add_scalar(f"gpu/{k}", v, global_step=opt_steps)
+
         # log progress
         pbar.update(1 / grad_acc)
         pbar.set_postfix(
@@ -143,7 +172,8 @@ def eval_and_checkpoint(
     config: Config,
     model: torch.nn.Module,
     val_dl: torch.utils.data.DataLoader,
-    logger: Logger,
+    logger: Logger | None,
+    tb_writer: SummaryWriter | None,
     resuming: bool,
     optimization_steps: float,
     best_metric: float = float("inf"),
@@ -151,7 +181,7 @@ def eval_and_checkpoint(
     # evaluation
     metric = None
     if (epoch + 1) % config.eval_interval == 0:
-        metric = evaluate(model, val_dl, logger, int(optimization_steps))
+        metric = evaluate(model, val_dl, logger, tb_writer, int(optimization_steps))
     # synchronize processes before saving
     synchronize()
     if is_main_process():
@@ -162,6 +192,11 @@ def eval_and_checkpoint(
             if metric < best_metric:
                 best_metric = metric
                 logger.info(f"New best metric: {best_metric}")
+                tb_writer.add_scalar(
+                    "val/best_metric",
+                    best_metric,
+                    global_step=optimization_steps,
+                )
                 # save the model
                 prefix = "model_best"
                 cleanup_checkpoints(config.project_dir, prefix, 1, logger)

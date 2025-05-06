@@ -3,6 +3,7 @@ import torch
 import torch.nn as nn
 from tqdm.auto import tqdm
 from logging import Logger
+from torch.utils.tensorboard import SummaryWriter
 from custom.model import MammoCLIP
 from .dist_utils import (
     is_dist_avail_and_initialized,
@@ -69,7 +70,8 @@ def save_checkpoint(
 def evaluate(
     model: nn.Module,
     val_dl: torch.utils.data.DataLoader,
-    logger: Logger,
+    logger: Logger | None,
+    tb_writer: SummaryWriter,
     step: int,
 ):
     """
@@ -117,5 +119,6 @@ def evaluate(
     # log only from the main process
     if is_main_process():
         logger.info(f"Val loss @ step {step}: {avg:.4f}")
+        tb_writer.add_scalar("val/loss", avg, global_step=step)
     model.train()
     return avg

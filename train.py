@@ -4,11 +4,12 @@ import torch
 from torch.utils.data import DataLoader
 import os
 from logging import Logger
+from torch.utils.tensorboard import SummaryWriter
 import argparse as ap
 
 from custom.model import MammoCLIP
 from custom.config import Config
-from utils.train_loop_utils import init_logger
+from utils.train_loop_utils import init_logger, init_tensorboard
 from utils.dist_utils import is_main_process, init_distributed_mode, cleanup
 from utils.model_utils import build_model_and_optim
 from utils.data_utils import prepare_dataloaders
@@ -19,6 +20,7 @@ from utils.train_loop_utils import train_one_epoch, eval_and_checkpoint
 def training_loop(
     config: Config,
     logger: Logger,
+    tb_writer: SummaryWriter,
     model: MammoCLIP,
     optimizer: torch.optim.Optimizer,
     scheduler: torch.optim.lr_scheduler.LRScheduler,
@@ -49,6 +51,7 @@ def training_loop(
             scheduler=scheduler,
             train_dl=train_dl,
             logger=logger,
+            tb_writer=tb_writer,
             starting_epoch=starting_epoch,
             optimization_steps=opt_steps,
         )
@@ -59,6 +62,7 @@ def training_loop(
             model=model,
             val_dl=val_dl,
             logger=logger,
+            tb_writer=tb_writer,
             resuming=resuming,
             optimization_steps=opt_steps,
             best_metric=best_metric,
@@ -128,6 +132,7 @@ def train_from_scratch(cfg_path: str):
 
     # Initialize logger
     logger = init_logger(config)
+    tb_writer = init_tensorboard(config)
 
     # number of parameters
     if is_main_process():
@@ -151,6 +156,7 @@ def train_from_scratch(cfg_path: str):
     training_loop(
         config=config,
         logger=logger,
+        tb_writer=tb_writer,
         model=model,
         optimizer=opt,
         scheduler=sched,
@@ -179,6 +185,7 @@ def resume(project_dir: str):
 
     # Initialize logger
     logger = init_logger(config)
+    tb_writer = init_tensorboard(config)
 
     # number of parameters
     if is_main_process():
@@ -203,6 +210,7 @@ def resume(project_dir: str):
     training_loop(
         config=config,
         logger=logger,
+        tb_writer=tb_writer,
         model=model,
         optimizer=opt,
         scheduler=sched,
