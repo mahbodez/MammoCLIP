@@ -53,29 +53,16 @@ def build_model_and_optim(
 
     stats = stats_from_epochs(
         num_epochs=config.training_params["num_epochs"],
-        num_gpus=torch.cuda.device_count(),
         accumulation_steps=config.training_params["gradient_accumulation_steps"],
         per_gpu_batch_size=config.training_params["batch_size"],
         dataset_size=dataset_size,
     )
 
-    warmup = (
-        int(
-            stats["total_optimization_steps"]
-            * config.training_params["warmup_fraction"]
-        )
-        // get_world_size()
-    )
+    total = stats["total_optimization_steps"]
+    warmup = int(total * config.training_params["warmup_fraction"])
     warmup = 0 if resume_from else warmup
-    steady = (
-        int(
-            stats["total_optimization_steps"]
-            * config.training_params["steady_fraction"]
-        )
-        // get_world_size()
-    )
+    steady = int(total * config.training_params["steady_fraction"])
     steady = 0 if resume_from else steady
-    total = stats["total_optimization_steps"] // get_world_size()
 
     scheduler = get_wsd_schedule(
         optimizer,

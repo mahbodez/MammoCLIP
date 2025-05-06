@@ -3,11 +3,11 @@ import re
 import subprocess
 import torch
 from typing import Dict
+from .dist_utils import get_world_size
 
 
 def stats_from_epochs(
     num_epochs: int,
-    num_gpus: int,
     accumulation_steps: int,
     per_gpu_batch_size: int,
     dataset_size: int,
@@ -17,14 +17,12 @@ def stats_from_epochs(
 
     Args:
       num_epochs: total epochs to run
-      num_gpus: number of processes (GPUs)
       accumulation_steps: how many forward/backward calls before each optimizer.step()
       per_gpu_batch_size: batch size seen by each process
       dataset_size: total samples in the Dataset
 
     Returns:
       A dict containing:
-        num_epochs
         effective_batch_size: per‐step global batch size = per_gpu_bs * num_gpus * accumulation_steps
         iterations_per_epoch: number of DataLoader batches per process = ceil(dataset_size / per_gpu_bs)
         total_batches: total forward/backward calls across all epochs = iterations_per_epoch * num_epochs
@@ -34,35 +32,38 @@ def stats_from_epochs(
         samples_per_epoch: total samples processed per epoch across all GPUs = iterations_per_epoch * per_gpu_bs * num_gpus
         total_samples: total samples processed across all epochs = samples_per_epoch * num_epochs
     """
+    num_gpus = get_world_size()
     # how many samples processed in one optimizer.step()
     effective_batch_size = per_gpu_batch_size * num_gpus * accumulation_steps
 
     # batches per epoch seen by each process (GPU)
-    iterations_per_epoch = math.ceil(dataset_size / per_gpu_batch_size)
+    batches_per_device_per_epoch = (
+        math.ceil(dataset_size / per_gpu_batch_size) // num_gpus
+    )
 
     # total forward/backward passes (batches) across all epochs, per process
-    total_batches = iterations_per_epoch * num_epochs
+    total_batches = batches_per_device_per_epoch * num_epochs
 
     # how many optimizer updates per epoch
-    optimization_steps_per_epoch = math.ceil(iterations_per_epoch / accumulation_steps)
+    optimization_steps_per_epoch = math.ceil(
+        batches_per_device_per_epoch / accumulation_steps
+    )
 
     # total optimizer updates over all epochs
     total_optimization_steps = optimization_steps_per_epoch * num_epochs
 
     # total samples processed per epoch across all GPUs
-    samples_per_epoch = iterations_per_epoch * per_gpu_batch_size * num_gpus
+    samples_per_epoch = batches_per_device_per_epoch * per_gpu_batch_size * num_gpus
 
     # total samples processed across the entire run
     total_samples = samples_per_epoch * num_epochs
 
     return {
-        "num_epochs": num_epochs,
         "effective_batch_size": effective_batch_size,
-        "iterations_per_epoch": iterations_per_epoch,
+        "iterations_per_epoch": batches_per_device_per_epoch,
         "total_batches": total_batches,
         "optimization_steps_per_epoch": optimization_steps_per_epoch,
         "total_optimization_steps": total_optimization_steps,
-        "samples_per_optimization_step": effective_batch_size,
         "samples_per_epoch": samples_per_epoch,
         "total_samples": total_samples,
     }
@@ -70,7 +71,6 @@ def stats_from_epochs(
 
 def stats_from_steps(
     total_optimization_steps,
-    num_gpus,
     accumulation_steps,
     per_gpu_batch_size,
     dataset_size,
@@ -80,7 +80,6 @@ def stats_from_steps(
 
     Parameters:
     - total_optimization_steps (int): Desired total number of optimizer (parameter update) steps.
-    - num_gpus (int): Number of GPUs used in training.
     - accumulation_steps (int): Number of gradient accumulation steps.
     - per_gpu_batch_size (int): Batch size per GPU.
     - dataset_size (int): Total number of samples in the dataset.
@@ -88,17 +87,15 @@ def stats_from_steps(
     Returns:
     - dict: A dictionary containing computed training statistics.
     """
+    num_gpus = get_world_size()
     # Effective batch size across all GPUs and accumulation steps
     effective_batch_size = per_gpu_batch_size * num_gpus * accumulation_steps
-
-    # Samples processed per optimization step
-    samples_per_optimization_step = effective_batch_size
 
     # Total iterations (total number of forward/backward passes)
     total_iterations = total_optimization_steps * accumulation_steps
 
     # Iterations per epoch (number of batches per epoch)
-    iterations_per_epoch = math.ceil(dataset_size / (per_gpu_batch_size * num_gpus))
+    iterations_per_epoch = math.ceil(dataset_size / (per_gpu_batch_size)) // num_gpus
 
     # Number of epochs required to complete total_iterations
     num_epochs = math.ceil(total_iterations / iterations_per_epoch)
@@ -118,7 +115,7 @@ def stats_from_steps(
 
     # Total samples processed
     total_samples = (
-        total_iterations * per_gpu_batch_size * num_gpus / accumulation_steps
+        total_iterations * per_gpu_batch_size * num_gpus // accumulation_steps
     )
 
     # Prepare the results dictionary
@@ -129,7 +126,6 @@ def stats_from_steps(
         "total_iterations": total_iterations,
         "optimization_steps_per_epoch": optimization_steps_per_epoch,
         "total_optimization_steps": total_optimization_steps,
-        "samples_per_optimization_step": samples_per_optimization_step,
         "samples_per_epoch": samples_per_epoch,
         "total_samples": total_samples,
     }
@@ -182,7 +178,7 @@ def get_gpu_memory_usage():
         }
 
     except Exception:
-        return None
+        return {}
 
 
 def get_gpu_power_usage():
@@ -220,7 +216,7 @@ def get_gpu_power_usage():
         return {"power": total_power}
 
     except Exception:
-        return None
+        return {}
 
 
 def get_gpu_temperature():
@@ -258,4 +254,4 @@ def get_gpu_temperature():
         return {"temp": total_temperature / len(temperature_data)}
 
     except Exception:
-        return None
+        return {}
