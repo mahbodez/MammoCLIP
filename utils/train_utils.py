@@ -21,6 +21,7 @@ def cleanup_checkpoints(
     (and if you passed "xxx_resumed", also cleans "xxx_<num>")
     keeping only the newest max_checkpoints per prefix.
     """
+    assert is_main_process(), "Only main process can clean checkpoints"
     max_checkpoints = max(1, max_checkpoints)  # at least keep one checkpoint
     # build list of prefixes to clean
     prefixes = [prefix]
@@ -54,6 +55,7 @@ def save_checkpoint(
     """
     Save model under project_dir/prefix_{epoch:03d}.
     """
+    assert is_main_process(), "Only main process can save checkpoints"
     logger.info("Saving model ...")
     path = os.path.join(project_dir, f"{prefix}_{epoch:03d}")
     try:
@@ -78,6 +80,9 @@ def evaluate(
         total=len(val_dl),
         disable=not is_main_process(),
         desc="Validation",
+        leave=False,
+        dynamic_ncols=True,
+        colour="blue",
     )
     losses = []
     # Dont forget to set_epoch for the sampler
