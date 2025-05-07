@@ -73,7 +73,7 @@ def build_model_and_optim(
             raise FileNotFoundError(f"Optimizer checkpoint not found at {opt_path}")
         if not os.path.isfile(sch_path):
             raise FileNotFoundError(f"Scheduler checkpoint not found at {sch_path}")
-        optimizer.load_state_dict(torch.load(opt_path, map_location="cpu"))
+        optimizer.load_state_dict(torch.load(opt_path))
 
     # --- COMMON: build scheduler ----------------------------------------
     scheduler = get_wsd_schedule(
@@ -87,7 +87,7 @@ def build_model_and_optim(
 
     # --- RESUME ONLY: load scheduler state ------------------------------
     if resuming:
-        scheduler.load_state_dict(torch.load(sch_path, map_location="cpu"))
+        scheduler.load_state_dict(torch.load(sch_path))
 
     # move to device / wrap DDP
     rank = get_rank()
