@@ -1,4 +1,3 @@
-from custom.config import Config
 import os
 import re
 from typing import Tuple

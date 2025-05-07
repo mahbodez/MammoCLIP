@@ -1,4 +1,8 @@
 import logging
+from logging import Logger
+from custom.config import Config
+from torch.utils.tensorboard import SummaryWriter
+from utils.dist_utils import is_main_process
 from typing import Optional
 import os
 
@@ -36,3 +40,30 @@ def setup_logger(
         logger.addHandler(fh)
 
     return logger
+
+
+def init_logger(config: Config) -> Logger:
+    """
+    Initialize logger on main process.
+    """
+    # Setup logger only on main process
+    logger = None
+    if is_main_process():
+        os.makedirs(config.project_dir, exist_ok=True)
+        logger = setup_logger(
+            "training",
+            log_to_file=os.path.join(config.project_dir, "logs", "train.log"),
+        )
+    return logger
+
+
+def init_tensorboard(config: Config) -> SummaryWriter | None:
+    """
+    Initialize TensorBoard writer on main process.
+    """
+    tb_writer = None
+    if is_main_process():
+        path = os.path.join(config.project_dir, "logs", "tensorboard")
+        os.makedirs(path, exist_ok=True)
+        tb_writer = SummaryWriter(log_dir=path)
+    return tb_writer

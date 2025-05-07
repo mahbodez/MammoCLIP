@@ -62,7 +62,17 @@ def save_checkpoint(
     """
     Save model, optimizer, and scheduler under project_dir/prefix_{epoch:03d}.
     """
-    assert is_main_process(), "Only main process can save checkpoints"
+    if not is_main_process():
+        raise RuntimeError("Only main process can save checkpoints")
+    if (
+        not isinstance(model, nn.Module)
+        or not isinstance(optimizer, torch.optim.Optimizer)
+        or not isinstance(scheduler, torch.optim.lr_scheduler.LRScheduler)
+    ):
+        raise ValueError("Invalid model, optimizer, or scheduler type")
+    if not isinstance(logger, Logger):
+        raise ValueError("Invalid logger type")
+
     logger.info("Saving checkpoint ...")
     path = os.path.join(project_dir, f"{prefix}_{epoch:03d}")
     os.makedirs(path, exist_ok=True)

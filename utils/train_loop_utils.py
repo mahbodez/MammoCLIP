@@ -2,7 +2,7 @@ import os
 from tqdm.auto import tqdm
 import torch
 from torch.amp import autocast, GradScaler
-from .dist_utils import is_main_process, synchronize, get_rank, get_world_size
+from .dist_utils import is_main_process, synchronize, get_rank
 from typing import Tuple, Dict
 from custom.config import Config
 from .stats import (
@@ -10,7 +10,6 @@ from .stats import (
     get_gpu_power_usage,
     get_gpu_temperature,
 )
-from .logger import setup_logger
 from .train_utils import (
     save_checkpoint,
     cleanup_checkpoints,
@@ -18,33 +17,6 @@ from .train_utils import (
 )
 from logging import Logger
 from torch.utils.tensorboard import SummaryWriter
-
-
-def init_logger(config: Config) -> Logger:
-    """
-    Initialize logger on main process.
-    """
-    # Setup logger only on main process
-    logger = None
-    if is_main_process():
-        os.makedirs(config.project_dir, exist_ok=True)
-        logger = setup_logger(
-            "training",
-            log_to_file=os.path.join(config.project_dir, "logs", "train.log"),
-        )
-    return logger
-
-
-def init_tensorboard(config: Config) -> SummaryWriter | None:
-    """
-    Initialize TensorBoard writer on main process.
-    """
-    tb_writer = None
-    if is_main_process():
-        path = os.path.join(config.project_dir, "logs", "tensorboard")
-        os.makedirs(path, exist_ok=True)
-        tb_writer = SummaryWriter(log_dir=path)
-    return tb_writer
 
 
 def poll_gpu_stats() -> Dict[str, float]:
