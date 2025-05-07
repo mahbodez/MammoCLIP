@@ -235,4 +235,5 @@ def main():
 
 if __name__ == "__main__":
     os.environ["NCCL_P2P_DISABLE"] = "1"
+    os.environ["OMP_NUM_THREADS"] = "1"
     main()
