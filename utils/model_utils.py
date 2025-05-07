@@ -9,30 +9,56 @@ from torch.nn.parallel import DistributedDataParallel as DDP
 from .dist_utils import get_rank, is_dist_avail_and_initialized
 
 
-def param_groups_named(named_params, base_lr, lr_mul, wd):
-    """Create parameter groups for optimizer with weight decay and no weight decay.
-    Args:
-        named_params (iterable): Iterable of (name, parameter) tuples.
-        base_lr (float): Base learning rate.
-        lr_mul (float): Learning rate multiplier.
-        wd (float): Weight decay.
-    Returns:
-        list: List of parameter groups.
-    """
-    decay, no_decay = [], []
-    for n, p in named_params:
-        if not p.requires_grad:
-            continue
-        if p.ndim == 1 or n.endswith(".bias") or "norm" in n.lower():
-            no_decay.append(p)
-        else:
-            decay.append(p)
-
+def build_param_groups(
+    model, base_lr, lr_mul, wd, vision_prefix="vision_model", text_prefix="text_model"
+):
+    """Return a list of param groups with no duplicates."""
+    all_seen = set()  # ids we have already added
     groups = []
-    if decay:
-        groups.append({"params": decay, "lr": base_lr * lr_mul, "weight_decay": wd})
-    if no_decay:
-        groups.append({"params": no_decay, "lr": base_lr * lr_mul, "weight_decay": 0.0})
+
+    def add_block(named_iter, lr_factor):
+        decay, no_decay = [], []
+        for n, p in named_iter:
+            if not p.requires_grad or id(p) in all_seen:
+                continue  # already in another block
+            all_seen.add(id(p))
+
+            if p.ndim == 1 or n.endswith(".bias") or "norm" in n.lower():
+                no_decay.append(p)
+            else:
+                decay.append(p)
+
+        if decay:
+            groups.append(
+                {"params": decay, "lr": base_lr * lr_factor, "weight_decay": wd}
+            )
+        if no_decay:
+            groups.append(
+                {"params": no_decay, "lr": base_lr * lr_factor, "weight_decay": 0.0}
+            )
+
+    # ---- vision ------------------------------------------------------------
+    add_block(
+        ((n, p) for n, p in model.named_parameters() if n.startswith(vision_prefix)),
+        lr_mul["vision"],
+    )
+
+    # ---- text --------------------------------------------------------------
+    add_block(
+        ((n, p) for n, p in model.named_parameters() if n.startswith(text_prefix)),
+        lr_mul["text"],
+    )
+
+    # ---- fusion (= everything else) ----------------------------------------
+    add_block(
+        (
+            (n, p)
+            for n, p in model.named_parameters()
+            if not n.startswith((vision_prefix, text_prefix))
+        ),
+        lr_mul["fusion"],
+    )
+
     return groups
 
 
@@ -67,34 +93,22 @@ def build_model_and_optim(
 
     # collect parameter groups ------------------------------------------------
     base_lr = config.training_params["lr_max"]
-    v_mul = config.training_params.get("vision_lr_mul", 1.0)
-    t_mul = config.training_params.get("text_lr_mul", 1.0)
-    f_mul = config.training_params.get("fusion_lr_mul", 5.0)  # sensible default
+    min_lr_ratio = config.training_params["lr_min"] / config.training_params["lr_max"]
     wd = config.training_params.get("weight_decay", 0.05)
 
-    param_groups = (
-        param_groups_named(
-            named_params=model.named_parameters(prefix="vision_model"),
-            base_lr=base_lr,
-            lr_mul=v_mul,
-            wd=wd,
-        )
-        + param_groups_named(
-            named_params=model.named_parameters(prefix="text_model"),
-            base_lr=base_lr,
-            lr_mul=t_mul,
-            wd=wd,
-        )
-        + param_groups_named(
-            named_params=(
-                (n, p)
-                for n, p in model.named_parameters()
-                if not n.startswith(("vision_model", "text_model"))
-            ),
-            base_lr=base_lr,
-            lr_mul=f_mul,
-            wd=wd,
-        )
+    lr_mul = {
+        "vision": config.training_params.get("vision_lr_mul", 1.0),
+        "text": config.training_params.get("text_lr_mul", 1.0),
+        "fusion": config.training_params.get("fusion_lr_mul", 5.0),
+    }
+
+    param_groups = build_param_groups(
+        model,
+        base_lr=base_lr,
+        lr_mul=lr_mul,
+        wd=wd,
+        vision_prefix="vision_model",
+        text_prefix="text_model",
     )
 
     # --- COMMON: compute stats and instantiate optimizer -----------------
@@ -110,6 +124,11 @@ def build_model_and_optim(
 
     betas = config.training_params.get("betas", (0.9, 0.98))
     eps = config.training_params.get("eps", 1e-8)
+
+    assert len({id(p) for g in param_groups for p in g["params"]}) == sum(
+        len(g["params"]) for g in param_groups
+    ), "Duplicate parameter detected!"
+
     optimizer = torch.optim.AdamW(param_groups, betas=betas, eps=eps)
 
     # --- RESUME ONLY: load optimizer state ------------------------------
@@ -133,8 +152,7 @@ def build_model_and_optim(
         num_warmup_steps=warmup,
         num_stable_steps=steady,
         num_decay_steps=total - warmup - steady,
-        min_lr_ratio=config.training_params["lr_min"]
-        / config.training_params["lr_max"],
+        min_lr_ratio=min_lr_ratio,
     )
 
     # --- RESUME ONLY: load scheduler state ------------------------------
