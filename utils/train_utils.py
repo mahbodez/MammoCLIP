@@ -63,16 +63,32 @@ def save_checkpoint(
     Save model, optimizer, and scheduler under project_dir/prefix_{epoch:03d}.
     """
     assert is_main_process(), "Only main process can save checkpoints"
-    logger.info("Saving model ...")
+    logger.info("Saving checkpoint ...")
     path = os.path.join(project_dir, f"{prefix}_{epoch:03d}")
+    os.makedirs(path, exist_ok=True)
+
+    # Save model
     try:
         model.save_pretrained(path)
-        torch.save(optimizer.state_dict(), os.path.join(path, "optimizer.pt"))
-        torch.save(scheduler.state_dict(), os.path.join(path, "scheduler.pt"))
+        logger.info(f"Model saved to {path}")
     except Exception as e:
-        logger.error(f"Error saving checkpoint {path}: {e}")
-        logger.info("Skipping ...")
-    logger.info(f"Model saved to {path}")
+        logger.error(f"Error saving model checkpoint {path}: {e}")
+
+    # Save optimizer state
+    opt_path = os.path.join(path, "optimizer.pt")
+    try:
+        torch.save(optimizer.state_dict(), opt_path)
+        logger.info(f"Optimizer state saved to {opt_path}")
+    except Exception as e:
+        logger.error(f"Error saving optimizer state {opt_path}: {e}")
+
+    # Save scheduler state
+    sch_path = os.path.join(path, "scheduler.pt")
+    try:
+        torch.save(scheduler.state_dict(), sch_path)
+        logger.info(f"Scheduler state saved to {sch_path}")
+    except Exception as e:
+        logger.error(f"Error saving scheduler state {sch_path}: {e}")
 
 
 @torch.inference_mode()
