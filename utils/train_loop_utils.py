@@ -157,9 +157,6 @@ def eval_and_checkpoint(
         metric = evaluate(model, val_dl, logger, tb_writer, int(optimization_steps))
     # synchronize processes before saving
     synchronize()
-    # Consolidate optimizer state for ZeroRedundancyOptimizer across all ranks
-    if hasattr(optimizer, "consolidate_state_dict"):
-        optimizer.consolidate_state_dict(to=0)
     if is_main_process():
         last = epoch == config.training_params["num_epochs"] - 1
         # if best metric is lower than current metric, save the model

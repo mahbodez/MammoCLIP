@@ -7,8 +7,6 @@ from .stats import stats_from_epochs
 from .freezer import freeze_submodules
 from torch.nn.parallel import DistributedDataParallel as DDP
 from .dist_utils import get_rank, is_dist_avail_and_initialized
-from torch.distributed.optim import ZeroRedundancyOptimizer
-from .dist_utils import get_world_size
 
 
 def build_model_and_optim(
@@ -61,19 +59,11 @@ def build_model_and_optim(
     warmup = int(total * config.training_params["warmup_fraction"])
     steady = int(total * config.training_params["steady_fraction"])
 
-    if is_dist_avail_and_initialized():
-        optimizer = ZeroRedundancyOptimizer(
-            params=model.parameters(),
-            optimizer_class=optimizer_cls,
-            lr=config.training_params["lr_max"],
-            **config.training_params["optimizer_kwargs"],
-        )
-    else:
-        optimizer = optimizer_cls(
-            params=model.parameters(),
-            lr=config.training_params["lr_max"],
-            **config.training_params["optimizer_kwargs"],
-        )
+    optimizer = optimizer_cls(
+        params=model.parameters(),
+        lr=config.training_params["lr_max"],
+        **config.training_params["optimizer_kwargs"],
+    )
 
     # --- RESUME ONLY: load optimizer state ------------------------------
     if resuming:
