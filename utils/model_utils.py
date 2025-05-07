@@ -94,5 +94,7 @@ def build_model_and_optim(
     model = model.to(rank)
     if is_dist_avail_and_initialized():
         model = DDP(model, device_ids=[rank], **config.ddp_kwargs)
+    optimizer.to(rank)
+    scheduler.to(rank)
 
     return model, optimizer, scheduler, stats, warmup, steady, total
