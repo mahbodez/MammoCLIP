@@ -64,7 +64,6 @@ def train_one_epoch(
     epoch: int,
     logger: Logger | None,
     tb_writer: SummaryWriter | None,
-    starting_epoch: int,
     optimization_steps: float = 0.0,
 ) -> float:
     gpu_id = get_rank()
@@ -72,7 +71,7 @@ def train_one_epoch(
     pbar = tqdm(
         total=len(train_dl) / grad_acc,
         disable=not is_main_process(),
-        desc=f"Epoch {epoch+1}/{starting_epoch+config.training_params['num_epochs']}",
+        desc=f"Epoch {epoch+1}/{config.training_params['num_epochs']}",
         leave=False,
         dynamic_ncols=True,
         colour="green",
@@ -171,6 +170,8 @@ def eval_and_checkpoint(
     epoch: int,
     config: Config,
     model: torch.nn.Module,
+    optimizer: torch.optim.Optimizer,
+    scheduler: torch.optim.lr_scheduler.LRScheduler,
     val_dl: torch.utils.data.DataLoader,
     logger: Logger | None,
     tb_writer: SummaryWriter | None,
@@ -204,6 +205,8 @@ def eval_and_checkpoint(
                 base_model = model.module if hasattr(model, "module") else model
                 save_checkpoint(
                     base_model,
+                    optimizer,
+                    scheduler,
                     config.project_dir,
                     prefix,
                     epoch + 1,
@@ -219,6 +222,8 @@ def eval_and_checkpoint(
             base_model = model.module if hasattr(model, "module") else model
             save_checkpoint(
                 base_model,
+                optimizer,
+                scheduler,
                 config.project_dir,
                 prefix,
                 epoch + 1,

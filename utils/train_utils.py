@@ -51,19 +51,28 @@ def cleanup_checkpoints(
 
 
 def save_checkpoint(
-    model: MammoCLIP, project_dir: str, prefix: str, epoch: int, logger: Logger
+    model: MammoCLIP,
+    optimizer: torch.optim.Optimizer,
+    scheduler: torch.optim.lr_scheduler.LRScheduler,
+    project_dir: str,
+    prefix: str,
+    epoch: int,
+    logger: Logger,
 ) -> None:
     """
-    Save model under project_dir/prefix_{epoch:03d}.
+    Save model, optimizer, and scheduler under project_dir/prefix_{epoch:03d}.
     """
     assert is_main_process(), "Only main process can save checkpoints"
     logger.info("Saving model ...")
     path = os.path.join(project_dir, f"{prefix}_{epoch:03d}")
     try:
         model.save_pretrained(path)
+        torch.save(optimizer.state_dict(), os.path.join(path, "optimizer.pt"))
+        torch.save(scheduler.state_dict(), os.path.join(path, "scheduler.pt"))
     except Exception as e:
         logger.error(f"Error saving checkpoint {path}: {e}")
         logger.info("Skipping ...")
+    logger.info(f"Model saved to {path}")
 
 
 @torch.inference_mode()

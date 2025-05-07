@@ -15,6 +15,7 @@ from utils.model_utils import build_model_and_optim
 from utils.data_utils import prepare_dataloaders
 from utils.seed_utils import set_seed
 from utils.train_loop_utils import train_one_epoch, eval_and_checkpoint
+from utils.resume import find_latest_checkpoint
 
 
 def training_loop(
@@ -26,7 +27,6 @@ def training_loop(
     scheduler: torch.optim.lr_scheduler.LRScheduler,
     train_dl: DataLoader,
     val_dl: DataLoader,
-    stats: dict = None,
     resuming: bool = False,
     starting_epoch: int = 0,  # for resuming
 ):
@@ -35,14 +35,11 @@ def training_loop(
     ), "Starting epoch must be 0 if not resuming, or > 0 if resuming."
 
     opt_steps = 0.0
-    total_steps = stats["total_optimization_steps"]
 
     best_metric = float("inf")
 
     # Now you train the model
-    for epoch in range(
-        starting_epoch, config.training_params["num_epochs"] + starting_epoch
-    ):
+    for epoch in range(starting_epoch, config.training_params["num_epochs"]):
         opt_steps = train_one_epoch(
             epoch=epoch,
             config=config,
@@ -52,7 +49,6 @@ def training_loop(
             train_dl=train_dl,
             logger=logger,
             tb_writer=tb_writer,
-            starting_epoch=starting_epoch,
             optimization_steps=opt_steps,
         )
 
@@ -60,6 +56,8 @@ def training_loop(
             epoch=epoch,
             config=config,
             model=model,
+            optimizer=optimizer,
+            scheduler=scheduler,
             val_dl=val_dl,
             logger=logger,
             tb_writer=tb_writer,
@@ -68,39 +66,6 @@ def training_loop(
             best_metric=best_metric,
         )
     torch.cuda.empty_cache()
-
-
-def _find_latest_checkpoint(project_dir: str) -> Tuple[int, str]:
-    """
-    Returns (latest_epoch, checkpoint_dir) or (0, "") if none found.
-    """
-    model_dirs = [
-        f
-        for f in os.listdir(project_dir)
-        if re.match(r"(model_resumed|model)_(\d+)$", f)
-        and os.path.isdir(os.path.join(project_dir, f))
-    ]
-    if not model_dirs:
-        print("No previous epochs found.")
-        return 0, ""
-    most_recent = max(model_dirs, key=lambda d: int(re.search(r"\d+", d).group()))
-    epoch = int(re.search(r"\d+", most_recent).group())
-    return epoch, os.path.join(project_dir, most_recent)
-
-
-def _patch_config_for_resume(config: Config, latest_epoch: int) -> Config:
-    """
-    Adjusts lr schedule and remaining epochs in-place.
-    """
-    total_epochs = config.training_params["num_epochs"]
-    # no work to do if already completed
-    if latest_epoch >= total_epochs:
-        return config
-    # linear decay of max lr
-    lr_max = config.training_params["lr_max"] * (1 - latest_epoch / total_epochs)
-    config.training_params["lr_max"] = lr_max
-    config.training_params["num_epochs"] = total_epochs - latest_epoch
-    return config
 
 
 def build_training_run(config: Config, resume_dir: str = None):
@@ -162,20 +127,19 @@ def train_from_scratch(cfg_path: str):
         scheduler=sched,
         train_dl=train_dl,
         val_dl=val_dl,
-        stats=stats,
     )
 
 
 def resume(project_dir: str):
-    latest_epoch, resume_dir = _find_latest_checkpoint(project_dir)
+    latest_epoch, resume_dir = find_latest_checkpoint(project_dir)
     if latest_epoch == 0 or resume_dir == "":
         print("No previous epochs found.")
         return
 
     config = Config.from_yaml(os.path.join(project_dir, "config.yaml"))
-    config = _patch_config_for_resume(config, latest_epoch)
-    if config.training_params["num_epochs"] == 0:
-        print("No remaining epochs to resume.")
+
+    if latest_epoch == config.training_params["num_epochs"]:
+        print("Training already completed.")
         return
 
     # delegate seeding, dataloaders, model/optim/sched setup
@@ -216,7 +180,6 @@ def resume(project_dir: str):
         scheduler=sched,
         train_dl=train_dl,
         val_dl=val_dl,
-        stats=stats,
         resuming=True,
         starting_epoch=latest_epoch,
     )
