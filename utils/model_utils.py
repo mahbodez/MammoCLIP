@@ -24,6 +24,7 @@ def build_model_and_optim(
         tuple: Model, optimizer, scheduler, stats, warmup, steady, total.
     """
     resuming = resume_from is not None
+    rank = get_rank()
 
     # load model
     if resuming:
@@ -74,6 +75,11 @@ def build_model_and_optim(
         if not os.path.isfile(sch_path):
             raise FileNotFoundError(f"Scheduler checkpoint not found at {sch_path}")
         optimizer.load_state_dict(torch.load(opt_path))
+        # move optimizer state tensors to the correct device after loading
+        for state in optimizer.state.values():
+            for k, v in state.items():
+                if isinstance(v, torch.Tensor):
+                    state[k] = v.to(rank)
 
     # --- COMMON: build scheduler ----------------------------------------
     scheduler = get_wsd_schedule(
@@ -90,11 +96,8 @@ def build_model_and_optim(
         scheduler.load_state_dict(torch.load(sch_path))
 
     # move to device / wrap DDP
-    rank = get_rank()
     model = model.to(rank)
     if is_dist_avail_and_initialized():
         model = DDP(model, device_ids=[rank], **config.ddp_kwargs)
-    optimizer.to(rank)
-    scheduler.to(rank)
 
     return model, optimizer, scheduler, stats, warmup, steady, total
