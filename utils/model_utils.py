@@ -9,6 +9,33 @@ from torch.nn.parallel import DistributedDataParallel as DDP
 from .dist_utils import get_rank, is_dist_avail_and_initialized
 
 
+def param_groups_named(named_params, base_lr, lr_mul, wd):
+    """Create parameter groups for optimizer with weight decay and no weight decay.
+    Args:
+        named_params (iterable): Iterable of (name, parameter) tuples.
+        base_lr (float): Base learning rate.
+        lr_mul (float): Learning rate multiplier.
+        wd (float): Weight decay.
+    Returns:
+        list: List of parameter groups.
+    """
+    decay, no_decay = [], []
+    for n, p in named_params:
+        if not p.requires_grad:
+            continue
+        if p.ndim == 1 or n.endswith(".bias") or "norm" in n.lower():
+            no_decay.append(p)
+        else:
+            decay.append(p)
+
+    groups = []
+    if decay:
+        groups.append({"params": decay, "lr": base_lr * lr_mul, "weight_decay": wd})
+    if no_decay:
+        groups.append({"params": no_decay, "lr": base_lr * lr_mul, "weight_decay": 0.0})
+    return groups
+
+
 def build_model_and_optim(
     config: Config,
     dataset_size: int,
@@ -38,16 +65,37 @@ def build_model_and_optim(
     if config.freeze_vision_model:
         freeze_submodules(model, ["vision_model"], True)
 
-    # pick optimizer class
-    optimizer_cls = {
-        "sgd": torch.optim.SGD,
-        "rmsprop": torch.optim.RMSprop,
-        "adagrad": torch.optim.Adagrad,
-        "adafactor": torch.optim.Adafactor,
-        "adam": torch.optim.Adam,
-        "adamw": torch.optim.AdamW,
-        "adamax": torch.optim.Adamax,
-    }.get(config.training_params["optimizer"].lower(), torch.optim.AdamW)
+    # collect parameter groups ------------------------------------------------
+    base_lr = config.training_params["lr_max"]
+    v_mul = config.training_params.get("vision_lr_mul", 1.0)
+    t_mul = config.training_params.get("text_lr_mul", 1.0)
+    f_mul = config.training_params.get("fusion_lr_mul", 5.0)  # sensible default
+    wd = config.training_params.get("weight_decay", 0.05)
+
+    param_groups = (
+        param_groups_named(
+            named_params=model.named_parameters(prefix="vision_model"),
+            base_lr=base_lr,
+            lr_mul=v_mul,
+            wd=wd,
+        )
+        + param_groups_named(
+            named_params=model.named_parameters(prefix="text_model"),
+            base_lr=base_lr,
+            lr_mul=t_mul,
+            wd=wd,
+        )
+        + param_groups_named(
+            named_params=(
+                (n, p)
+                for n, p in model.named_parameters()
+                if not n.startswith(("vision_model", "text_model"))
+            ),
+            base_lr=base_lr,
+            lr_mul=f_mul,
+            wd=wd,
+        )
+    )
 
     # --- COMMON: compute stats and instantiate optimizer -----------------
     stats = stats_from_epochs(
@@ -60,11 +108,9 @@ def build_model_and_optim(
     warmup = int(total * config.training_params["warmup_fraction"])
     steady = int(total * config.training_params["steady_fraction"])
 
-    optimizer = optimizer_cls(
-        params=model.parameters(),
-        lr=config.training_params["lr_max"],
-        **config.training_params["optimizer_kwargs"],
-    )
+    betas = config.training_params.get("betas", (0.9, 0.98))
+    eps = config.training_params.get("eps", 1e-8)
+    optimizer = torch.optim.AdamW(param_groups, betas=betas, eps=eps)
 
     # --- RESUME ONLY: load optimizer state ------------------------------
     if resuming:

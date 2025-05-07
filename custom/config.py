@@ -30,15 +30,17 @@ class Config:
             batch_size=8,
             lr_max=1e-4,
             lr_min=5e-7,
+            vision_lr_mul=1.0,
+            text_lr_mul=1.0,
+            fusion_lr_mul=1.0,
             lr_scheduler="wsd_schedule",
             warmup_fraction=0.05,
             steady_fraction=0.25,
             gradient_accumulation_steps=2,
             max_grad_norm=1.0,
-            optimizer="adamw",
-            optimizer_kwargs=dict(
-                weight_decay=1e-6,
-            ),
+            weight_decay=1e-6,
+            eps=1e-8,
+            betas=(0.9, 0.999),
             mixed_precision="bf16",
         )
     )
