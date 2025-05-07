@@ -116,11 +116,12 @@ def train_one_epoch(
                     loss.item() * grad_acc,
                     global_step=opt_steps,
                 )
-                tb_writer.add_scalar(
-                    "train/lr",
-                    scheduler.get_last_lr()[0],
-                    global_step=opt_steps,
-                )
+                for group in range(len(optimizer.param_groups)):
+                    tb_writer.add_scalar(
+                        f"train/lr{group}",
+                        scheduler.get_last_lr()[group],
+                        global_step=opt_steps,
+                    )
                 for k, v in gpu_stats.items():
                     tb_writer.add_scalar(f"gpu/{k}", v, global_step=opt_steps)
 
@@ -129,7 +130,10 @@ def train_one_epoch(
         pbar.set_postfix(
             {
                 "loss": loss.item() * grad_acc,
-                "lr": scheduler.get_last_lr()[0],
+                **{
+                    f"lr{group}": scheduler.get_last_lr()[group]
+                    for group in range(len(optimizer.param_groups))
+                },
                 **gpu_stats,
             }
         )
