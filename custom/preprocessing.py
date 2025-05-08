@@ -238,12 +238,14 @@ class MammogramTransform(Dictable):
                 ),
                 (  # ----------Random Affine----------
                     T.RandomApply(
-                        T.RandomAffine(
-                            degrees=self.degrees,
-                            translate=self.translate,
-                            shear=self.shear,
-                            interpolation=T.InterpolationMode.BILINEAR,
-                        ),
+                        [
+                            T.RandomAffine(
+                                degrees=self.degrees,
+                                translate=self.translate,
+                                shear=self.shear,
+                                interpolation=T.InterpolationMode.BILINEAR,
+                            )
+                        ],
                         p=self.prob,
                     )
                     if not self.is_validation
@@ -251,9 +253,11 @@ class MammogramTransform(Dictable):
                 ),
                 (  # ----------Color Jitter----------
                     T.RandomApply(
-                        T.ColorJitter(
-                            brightness=self.brightness, contrast=self.contrast
-                        ),
+                        [
+                            T.ColorJitter(
+                                brightness=self.brightness, contrast=self.contrast
+                            )
+                        ],
                         p=self.prob,
                     )
                     if not self.is_validation
@@ -261,9 +265,13 @@ class MammogramTransform(Dictable):
                 ),
                 (  # ----------Random Gamma Correction----------
                     T.RandomApply(
-                        T.Lambda(
-                            lambda x: x.pow(torch.empty(1).uniform_(*self.gamma).item())
-                        ),
+                        [
+                            T.Lambda(
+                                lambda x: x.pow(
+                                    torch.empty(1).uniform_(*self.gamma).item()
+                                )
+                            )
+                        ],
                         p=self.prob,
                     )
                     if not self.is_validation
@@ -271,7 +279,7 @@ class MammogramTransform(Dictable):
                 ),
                 (  # ----------Random Gaussian Noise----------
                     T.RandomApply(
-                        GaussianNoise(mean=0.0, std=self.noise_std), p=self.prob
+                        [GaussianNoise(mean=0.0, std=self.noise_std)], p=self.prob
                     )
                     if not self.is_validation
                     else nn.Identity()
