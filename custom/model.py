@@ -47,11 +47,11 @@ class MammoCLIP(VisionTextDualEncoderModel):
     ):
         super().__init__(config, vision_model, text_model)
         if config.fusion_type == "attention":
-            self.vision_fusion = AttentionFusion(
+            self.fusion_layer = AttentionFusion(
                 embedding_dim=config.vision_config.hidden_size
             )
         elif config.fusion_type == "linear":
-            self.vision_fusion = nn.Linear(
+            self.fusion_layer = nn.Linear(
                 config.vision_config.hidden_size * config.num_views,
                 config.vision_config.hidden_size,
                 bias=False,
@@ -60,7 +60,7 @@ class MammoCLIP(VisionTextDualEncoderModel):
             raise ValueError(
                 f"Unknown fusion type {config.fusion_type}. Supported types are 'linear' and 'attention'."
             )
-        self.view_embedding = ViewEmbedding(
+        self.fusion_embedding = ViewEmbedding(
             num_views=config.num_views, embedding_dim=config.vision_config.hidden_size
         )
         self.verbose = verbose
@@ -148,7 +148,7 @@ class MammoCLIP(VisionTextDualEncoderModel):
         # get stacked images of shape (bs, n_views, hidden_size)
         # and apply the view embedding
         # Now we add positional (per-view) learnable embeddings
-        embedded_images = self.view_embedding(stacked_images)
+        embedded_images = self.fusion_embedding(stacked_images)
         self._print(
             f"Stacked images shape: {stacked_images.shape}, Embedded images shape: {embedded_images.shape}"
         )
@@ -176,16 +176,16 @@ class MammoCLIP(VisionTextDualEncoderModel):
         """
         B, N, D = embedded_images.shape
         # now we can use the attention fusion to get a single embedding
-        if isinstance(self.vision_fusion, AttentionFusion):
-            fused_embedding, attn_weights = self.vision_fusion(embedded_images)
-        elif isinstance(self.vision_fusion, nn.Linear):
+        if isinstance(self.fusion_layer, AttentionFusion):
+            fused_embedding, attn_weights = self.fusion_layer(embedded_images)
+        elif isinstance(self.fusion_layer, nn.Linear):
             embedded_images = embedded_images.reshape(B, N * D)
-            fused_embedding = self.vision_fusion(embedded_images)
+            fused_embedding = self.fusion_layer(embedded_images)
             attn_weights = None
         else:
             raise ValueError(
                 "Currently only AttentionFusion and Linear fusion are supported."
-                f" Got {type(self.vision_fusion)}"
+                f" Got {type(self.fusion_layer)}"
             )
         # fused_embedding is of shape (bs, hidden_size)
         # attn_weights is of shape (bs, n_views)

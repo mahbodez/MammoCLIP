@@ -10,7 +10,13 @@ from .dist_utils import get_rank, is_dist_avail_and_initialized
 
 
 def build_param_groups(
-    model, base_lr, lr_mul, wd, vision_prefix="vision_model", text_prefix="text_model"
+    model,
+    base_lr,
+    lr_mul,
+    wd,
+    vision_prefix="vision_model",
+    text_prefix="text_model",
+    fusion_prefix="fusion_",
 ):
     """Return a list of param groups with no duplicates."""
     all_seen = set()  # ids we have already added
@@ -51,11 +57,7 @@ def build_param_groups(
 
     # ---- fusion (= everything else) ----------------------------------------
     add_block(
-        (
-            (n, p)
-            for n, p in model.named_parameters()
-            if not n.startswith((vision_prefix, text_prefix))
-        ),
+        ((n, p) for n, p in model.named_parameters() if n.startswith(fusion_prefix)),
         lr_mul["fusion"],
     )
 
@@ -109,6 +111,7 @@ def build_model_and_optim(
         wd=wd,
         vision_prefix="vision_model",
         text_prefix="text_model",
+        fusion_prefix="fusion_",
     )
 
     # --- COMMON: compute stats and instantiate optimizer -----------------
