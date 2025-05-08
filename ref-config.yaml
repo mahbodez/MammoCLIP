@@ -9,12 +9,12 @@ ddp_kwargs:
   find_unused_parameters: true
 max_checkpoints: 4
 pretrained_model_cfg:
-  fusion_type: linear
+  fusion_type: attention
   num_views: 4
   text_model_name_or_path: microsoft/BiomedVLP-CXR-BERT-general
   verbose: false
   vision_model_name_or_path: microsoft/rad-dino
-project_dir: ./mammoclip-v3
+project_dir: ./mammoclip-v4
 save_interval: 1
 seed: 42
 train_ds:
@@ -37,7 +37,7 @@ train_ds:
           - 518
         use_clahe: true
       class_: MammogramPreprocessor
-    path_to_df: ./mammoclip-v3/train.csv
+    path_to_df: ./mammoclip-v4/train.csv
     pid_col: id
     text_col: report
     tokenizer: microsoft/BiomedVLP-CXR-BERT-general
@@ -66,7 +66,7 @@ train_ds:
         degrees: 10
         scale:
           - 0.8
-          - 1.1
+          - 1.2
         shear:
           - -10
           - 10
@@ -99,7 +99,7 @@ training_params:
   steady_fraction: 0.05
   train_fraction: 0.8
   warmup_fraction: 0.05
-  weight_decay: 0.1
+  weight_decay: 0.01
   betas:
     - 0.9
     - 0.98
@@ -122,7 +122,7 @@ val_ds:
           - 518
         use_clahe: true
       class_: MammogramPreprocessor
-    path_to_df: ./mammoclip-v3/val.csv
+    path_to_df: ./mammoclip-v4/val.csv
     pid_col: id
     text_col: report
     tokenizer: microsoft/BiomedVLP-CXR-BERT-general
