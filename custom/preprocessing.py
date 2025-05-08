@@ -286,9 +286,9 @@ class MammogramTransform(Dictable):
                 ),
                 # ----------Normalization----------
                 T.Normalize(mean=self.mean, std=self.std),
-                (  # ----------Random Dropout----------
+                (  # ----------Random pseudoDropout----------
                     T.RandomApply(
-                        [T.Lambda(lambda x: x * 0)],
+                        [T.Lambda(lambda x: torch.randn_like(x) * 1e-3)],
                         p=self.dropout_prob,
                     )
                     if not self.is_validation
