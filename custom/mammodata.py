@@ -234,7 +234,7 @@ class MammogramDataset(Dataset, Dictable):
         if os.path.exists(cache_dir):
             for file in os.listdir(cache_dir):
                 file_path = os.path.join(cache_dir, file)
-                if os.path.isfile(file_path) and file.endswith(".npz"):
+                if os.path.isfile(file_path) and file.endswith(".npy"):
                     os.remove(file_path)
             os.rmdir(cache_dir)
 
@@ -245,7 +245,7 @@ class MammogramDataset(Dataset, Dictable):
         if os.path.exists(self.cache_dir):
             for file in os.listdir(self.cache_dir):
                 file_path = os.path.join(self.cache_dir, file)
-                if os.path.isfile(file_path) and file.endswith(".npz"):
+                if os.path.isfile(file_path) and file.endswith(".npy"):
                     os.remove(file_path)
             os.rmdir(self.cache_dir)
 
