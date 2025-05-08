@@ -58,11 +58,11 @@ train_ds:
         noise_std:
           - 0.0
           - 0.05
-        brightness: 0.1
-        contrast: 0.1
+        brightness: 0.15
+        contrast: 0.15
         gamma:
-          - 0.75
-          - 1.25
+          - 1.0
+          - 1.0
         degrees: 10
         scale:
           - 0.8
@@ -78,7 +78,9 @@ train_ds:
         translate:
           - 0.05
           - 0.05
-        eps: 0.001
+        remove_range:
+          - 0.15
+          - 0.35
       class_: MammogramTransform
     weights_col: weight
   class_: MammogramDataset
