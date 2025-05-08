@@ -296,7 +296,8 @@ class MammoCLIP(VisionTextDualEncoderModel):
         text_embeds = text_embeds / text_embeds.norm(dim=-1, keepdim=True)
 
         # cosine similarity as logits
-        logit_scale = self.logit_scale.clamp(0, 4.4).exp()
+        logit_scale = self.logit_scale.clamp(0, 4.4)
+        logit_scale = logit_scale.exp()
         logits_per_text = torch.matmul(text_embeds, image_embeds.t()) * logit_scale
         logits_per_image = logits_per_text.T
 
