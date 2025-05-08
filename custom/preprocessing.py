@@ -7,6 +7,8 @@ from skimage.measure import label, regionprops
 from torchvision import transforms as T
 import torch.nn as nn
 from torch.nn import ModuleList
+from skimage.filters import threshold_otsu
+from skimage.morphology import binary_closing, remove_small_holes, disk
 
 
 class MammogramPreprocessor(Dictable):
@@ -177,7 +179,7 @@ class MammogramTransform(Dictable):
         prob: float = 0.0,
         dropout_prob: float = 0.0,
         is_validation: bool = False,
-        eps: float = 1e-2,
+        remove_range: Tuple[float] = (0.0, 0.0),
         *args,
         **kwargs
     ):
@@ -197,7 +199,7 @@ class MammogramTransform(Dictable):
             prob (float): Probability of applying the transform, given that is_validation is False.
             dropout_prob (float): Probability of dropout, e.g., 0.1 means 10% of images will be dropped.
             is_validation (bool): Whether the transform is for validation.
-            eps (float): Small value to avoid division by zero.
+            remove_range (tuple): Range for random erasing, e.g., (0.8, 0.95).
         """
         self.size = size
         self.degrees = degrees
@@ -213,7 +215,7 @@ class MammogramTransform(Dictable):
         self.prob = prob
         self.dropout_prob = dropout_prob
         self.is_validation = is_validation
-        self.eps = eps
+        self.remove_range = remove_range
 
         self.aug = T.Compose(
             [
@@ -228,16 +230,12 @@ class MammogramTransform(Dictable):
                     else T.Resize(self.size, interpolation=T.InterpolationMode.BICUBIC)
                 ),
                 (  # ----------Random Affine----------
-                    T.RandomApply(
-                        ModuleList(
-                            [
-                                T.RandomAffine(
-                                    degrees=self.degrees,
-                                    translate=self.translate,
-                                    shear=self.shear,
-                                    interpolation=T.InterpolationMode.BILINEAR,
-                                )
-                            ]
+                    RandomApply(
+                        T.RandomAffine(
+                            degrees=self.degrees,
+                            translate=self.translate,
+                            shear=self.shear,
+                            interpolation=T.InterpolationMode.BILINEAR,
                         ),
                         p=self.prob,
                     )
@@ -245,13 +243,9 @@ class MammogramTransform(Dictable):
                     else nn.Identity()
                 ),
                 (  # ----------Color Jitter----------
-                    T.RandomApply(
-                        ModuleList(
-                            [
-                                T.ColorJitter(
-                                    brightness=self.brightness, contrast=self.contrast
-                                )
-                            ]
+                    RandomApply(
+                        T.ColorJitter(
+                            brightness=self.brightness, contrast=self.contrast
                         ),
                         p=self.prob,
                     )
@@ -259,31 +253,31 @@ class MammogramTransform(Dictable):
                     else nn.Identity()
                 ),
                 (  # ----------Random Gamma Correction----------
-                    T.RandomApply(
-                        ModuleList([RandomGamma(self.gamma)]),
+                    RandomApply(
+                        RandomGamma(self.gamma),
                         p=self.prob,
                     )
                     if not self.is_validation
                     else nn.Identity()
                 ),
                 (  # ----------Random Gaussian Noise----------
-                    T.RandomApply(
-                        ModuleList([GaussianNoise(mean=0.0, std=self.noise_std)]),
+                    RandomApply(
+                        GaussianNoise(mean=0.0, std=self.noise_std),
                         p=self.prob,
+                    )
+                    if not self.is_validation
+                    else nn.Identity()
+                ),
+                (  # ----------Random pseudoDropout----------
+                    RandomApply(
+                        PseudoDropout(self.remove_range),
+                        p=self.dropout_prob,
                     )
                     if not self.is_validation
                     else nn.Identity()
                 ),
                 # ----------Normalization----------
                 T.Normalize(mean=self.mean, std=self.std),
-                (  # ----------Random pseudoDropout----------
-                    T.RandomApply(
-                        ModuleList([PseudoDropout(self.eps)]),
-                        p=self.dropout_prob,
-                    )
-                    if not self.is_validation
-                    else nn.Identity()
-                ),
             ]
         )
 
@@ -323,12 +317,22 @@ class RandomGamma(nn.Module):
 
 
 class PseudoDropout(nn.Module):
-    def __init__(self, eps):
+    def __init__(self, remove: Tuple[float] = (0.0, 0.0)):
         super(PseudoDropout, self).__init__()
-        if eps <= 0:
-            raise ValueError("eps must be a positive value.")
-        self.eps = eps
+        self.dropout = T.RandomErasing(p=1.0, scale=remove)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         # Apply pseudo-dropout
-        return torch.randn_like(x) * self.eps
+        return self.dropout(x)
+
+
+class RandomApply(nn.Module):
+    def __init__(self, module: nn.Module, p: float = 0.5):
+        super(RandomApply, self).__init__()
+        self.module = module
+        self.p = p
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        if torch.rand(1).item() < self.p:
+            return self.module(x)
+        return x
