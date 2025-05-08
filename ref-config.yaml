@@ -14,7 +14,7 @@ pretrained_model_cfg:
   text_model_name_or_path: microsoft/BiomedVLP-CXR-BERT-general
   verbose: false
   vision_model_name_or_path: microsoft/rad-dino
-project_dir: ./mammoclip-v2
+project_dir: ./mammoclip-v3
 save_interval: 1
 seed: 42
 train_ds:
@@ -37,7 +37,7 @@ train_ds:
           - 518
         use_clahe: true
       class_: MammogramPreprocessor
-    path_to_df: ./mammoclip-v2/train.csv
+    path_to_df: ./mammoclip-v3/train.csv
     pid_col: id
     text_col: report
     tokenizer: microsoft/BiomedVLP-CXR-BERT-general
@@ -119,7 +119,7 @@ val_ds:
           - 518
         use_clahe: true
       class_: MammogramPreprocessor
-    path_to_df: ./mammoclip-v1/val.csv
+    path_to_df: ./mammoclip-v3/val.csv
     pid_col: id
     text_col: report
     tokenizer: microsoft/BiomedVLP-CXR-BERT-general
