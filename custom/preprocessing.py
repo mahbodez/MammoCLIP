@@ -182,11 +182,11 @@ class MammogramTransform(Dictable):
         shear: Tuple = (0, 0, 0, 0),
         brightness: float = 0.0,
         contrast: float = 0.0,
-        gamma: Tuple[float] = (0.75, 1.25),
+        gamma: Tuple[float] = (1.0, 1.0),
         mean: Tuple[float] = (0.25,),
         std: Tuple[float] = (0.25,),
         noise_std: Tuple[float] = (0.0, 0.0),
-        prob: float = 0.5,
+        prob: float = 0.0,
         dropout_prob: float = 0.0,
         is_validation: bool = False,
         *args,
@@ -220,8 +220,8 @@ class MammogramTransform(Dictable):
         self.mean = mean
         self.std = std
         self.noise_std = noise_std
-        self.prob = np.clip(prob, 0.0, 1.0)
-        self.dropout_prob = np.clip(dropout_prob, 0.0, 1.0)
+        self.prob = prob
+        self.dropout_prob = dropout_prob
         self.is_validation = is_validation
 
         self.aug = T.Compose(
@@ -286,6 +286,14 @@ class MammogramTransform(Dictable):
                 ),
                 # ----------Normalization----------
                 T.Normalize(mean=self.mean, std=self.std),
+                (  # ----------Random Dropout----------
+                    T.RandomApply(
+                        [T.Lambda(lambda x: x * 0)],
+                        p=self.dropout_prob,
+                    )
+                    if not self.is_validation
+                    else nn.Identity()
+                ),
             ]
         )
 
@@ -301,11 +309,6 @@ class MammogramTransform(Dictable):
         Returns:
             torch.Tensor: Augmented image tensor.
         """
-        # ----------------- Dropout ----------------
-        size = (1, *self.size) if len(self.size) == 2 else self.size
-        if self.dropout_prob > 0 and not self.is_validation:
-            if torch.rand(1).item() < self.dropout_prob:
-                return torch.zeros(*size)
         return self.aug(img)
 
     def __call__(self, img: torch.Tensor | np.ndarray) -> torch.Tensor:
