@@ -180,9 +180,14 @@ class MammogramTransform(Dictable):
         translate: Tuple[float] = (0, 0),
         scale: Tuple[float] = (1, 1),
         shear: Tuple = (0, 0, 0, 0),
+        brightness: float = 0.0,
+        contrast: float = 0.0,
+        gamma: Tuple[float] = (0.75, 1.25),
         mean: Tuple[float] = (0.25,),
         std: Tuple[float] = (0.25,),
         noise_std: Tuple[float] = (0.0, 0.0),
+        prob: float = 0.5,
+        dropout_prob: float = 0.0,
         is_validation: bool = False,
         *args,
         **kwargs
@@ -194,9 +199,14 @@ class MammogramTransform(Dictable):
             translate (tuple): Translation for random affine transformation, e.g., (h, v).
             scale (tuple): Scale for random affine transformation, e.g., (0.8, 1.2).
             shear (tuple): Shear for random affine transformation, e.g., (x_min, x_max, y_min, y_max).
+            brightness (float): Brightness jitter factor, e.g., 0.2.
+            contrast (float): Contrast jitter factor, e.g., 0.2.
+            gamma (tuple): Gamma range for random gamma correction, e.g., (0.75, 1.25).
             mean (tuple): Mean for normalization.
             std (tuple): Standard deviation for normalization.
             noise_std (tuple): Standard deviation range for Gaussian noise, e.g., (0.0, 0.01).
+            prob (float): Probability of applying the transform, given that is_validation is False.
+            dropout_prob (float): Probability of dropout, e.g., 0.1 means 10% of images will be dropped.
             is_validation (bool): Whether the transform is for validation.
         """
         self.size = size
@@ -204,39 +214,70 @@ class MammogramTransform(Dictable):
         self.translate = translate
         self.scale = scale
         self.shear = shear
+        self.brightness = brightness
+        self.contrast = contrast
+        self.gamma = gamma
         self.mean = mean
         self.std = std
         self.noise_std = noise_std
+        self.prob = np.clip(prob, 0.0, 1.0)
+        self.dropout_prob = np.clip(dropout_prob, 0.0, 1.0)
         self.is_validation = is_validation
 
         self.aug = T.Compose(
             [
                 T.ToTensor(),
-                (
-                    T.RandomAffine(
-                        degrees=degrees,
-                        translate=translate,
-                        shear=shear,
-                        interpolation=T.InterpolationMode.BILINEAR,
-                    )
-                    if not is_validation
-                    else nn.Identity()
-                ),
-                (
+                (  # ----------Random Resized Crop----------
                     T.RandomResizedCrop(
-                        size=size,
-                        scale=scale,
+                        size=self.size,
+                        scale=self.scale,
                         interpolation=T.InterpolationMode.BICUBIC,
                     )
-                    if not is_validation
-                    else T.Resize(size, interpolation=T.InterpolationMode.BICUBIC)
+                    if not self.is_validation
+                    else T.Resize(self.size, interpolation=T.InterpolationMode.BICUBIC)
                 ),
-                (
-                    GaussianNoise(mean=0.0, std=noise_std)
-                    if not is_validation
+                (  # ----------Random Affine----------
+                    T.RandomApply(
+                        T.RandomAffine(
+                            degrees=self.degrees,
+                            translate=self.translate,
+                            shear=self.shear,
+                            interpolation=T.InterpolationMode.BILINEAR,
+                        ),
+                        p=self.prob,
+                    )
+                    if not self.is_validation
                     else nn.Identity()
                 ),
-                T.Normalize(mean=mean, std=std),
+                (  # ----------Color Jitter----------
+                    T.RandomApply(
+                        T.ColorJitter(
+                            brightness=self.brightness, contrast=self.contrast
+                        ),
+                        p=self.prob,
+                    )
+                    if not self.is_validation
+                    else nn.Identity()
+                ),
+                (  # ----------Random Gamma Correction----------
+                    T.RandomApply(
+                        T.Lambda(
+                            lambda x: x.pow(torch.empty(1).uniform_(*self.gamma).item())
+                        ),
+                        p=self.prob,
+                    )
+                    if not self.is_validation
+                    else nn.Identity()
+                ),
+                (  # ----------Random Gaussian Noise----------
+                    T.RandomApply(
+                        GaussianNoise(mean=0.0, std=self.noise_std), p=self.prob
+                    )
+                    if not self.is_validation
+                    else nn.Identity()
+                ),
+                # ----------Normalization----------
+                T.Normalize(mean=self.mean, std=self.std),
             ]
         )
 
@@ -244,21 +285,25 @@ class MammogramTransform(Dictable):
     def name(self):
         return "MammogramTransform"
 
-    def forward(self, img: torch.Tensor) -> torch.Tensor:
+    def forward(self, img: torch.Tensor | np.ndarray) -> torch.Tensor:
         """
         Apply augmentations to the image.
         Args:
-            img (torch.Tensor): Input image tensor.
+            img (torch.Tensor|np.ndarray): Input image tensor.
         Returns:
             torch.Tensor: Augmented image tensor.
         """
+        # ----------------- Dropout ----------------
+        if self.dropout_prob > 0 and not self.is_validation:
+            if torch.rand(1).item() < self.dropout_prob:
+                return torch.zeros(*self.size)
         return self.aug(img)
 
-    def __call__(self, img: torch.Tensor) -> torch.Tensor:
+    def __call__(self, img: torch.Tensor | np.ndarray) -> torch.Tensor:
         """
         Call method to apply augmentations.
         Args:
-            img (torch.Tensor): Input image tensor.
+            img (torch.Tensor|np.ndarray): Input image tensor.
         Returns:
             torch.Tensor: Augmented image tensor.
         """

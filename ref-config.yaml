@@ -48,13 +48,22 @@ train_ds:
       truncation: true
     transform_function:
       attrs_:
-        degrees: 15
         is_validation: false
+        prob: 0.5
+        dropout_prob: 0.15
         mean:
           - 0.281
+        std:
+          - 0.217
         noise_std:
           - 0.0
-          - 0.03
+          - 0.05
+        brightness: 0.1
+        contrast: 0.1
+        gamma:
+          - 0.75
+          - 1.25
+        degrees: 10
         scale:
           - 0.8
           - 1.1
@@ -66,8 +75,6 @@ train_ds:
         size:
           - 518
           - 518
-        std:
-          - 0.217
         translate:
           - 0.05
           - 0.05
@@ -123,28 +130,13 @@ val_ds:
       truncation: true
     transform_function:
       attrs_:
-        degrees: 0
         is_validation: true
         mean:
           - 0.281
-        noise_std:
-          - 0.0
-          - 0.0
-        scale:
-          - 1.0
-          - 1.0
-        shear:
-          - 0
-          - 0
-          - 0
-          - 0
+        std:
+          - 0.217
         size:
           - 518
           - 518
-        std:
-          - 0.217
-        translate:
-          - 0.0
-          - 0.0
       class_: MammogramTransform
   class_: MammogramDataset
