@@ -216,7 +216,6 @@ class MammogramTransform(Dictable):
                     T.RandomAffine(
                         degrees=degrees,
                         translate=translate,
-                        scale=scale,
                         shear=shear,
                         interpolation=T.InterpolationMode.BILINEAR,
                     )
@@ -224,7 +223,11 @@ class MammogramTransform(Dictable):
                     else nn.Identity()
                 ),
                 (
-                    T.RandomCrop(size=size)
+                    T.RandomResizedCrop(
+                        size=size,
+                        scale=scale,
+                        interpolation=T.InterpolationMode.BICUBIC,
+                    )
                     if not is_validation
                     else T.Resize(size, interpolation=T.InterpolationMode.BICUBIC)
                 ),
