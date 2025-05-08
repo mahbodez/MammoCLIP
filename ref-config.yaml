@@ -78,6 +78,7 @@ train_ds:
         translate:
           - 0.05
           - 0.05
+        eps: 0.01
       class_: MammogramTransform
     weights_col: weight
   class_: MammogramDataset

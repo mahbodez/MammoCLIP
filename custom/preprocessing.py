@@ -189,6 +189,7 @@ class MammogramTransform(Dictable):
         prob: float = 0.0,
         dropout_prob: float = 0.0,
         is_validation: bool = False,
+        eps: float = 1e-2,
         *args,
         **kwargs
     ):
@@ -208,6 +209,7 @@ class MammogramTransform(Dictable):
             prob (float): Probability of applying the transform, given that is_validation is False.
             dropout_prob (float): Probability of dropout, e.g., 0.1 means 10% of images will be dropped.
             is_validation (bool): Whether the transform is for validation.
+            eps (float): Small value to avoid division by zero.
         """
         self.size = size
         self.degrees = degrees
@@ -223,6 +225,7 @@ class MammogramTransform(Dictable):
         self.prob = prob
         self.dropout_prob = dropout_prob
         self.is_validation = is_validation
+        self.eps = eps
 
         self.aug = T.Compose(
             [
@@ -288,7 +291,7 @@ class MammogramTransform(Dictable):
                 T.Normalize(mean=self.mean, std=self.std),
                 (  # ----------Random pseudoDropout----------
                     T.RandomApply(
-                        [T.Lambda(lambda x: torch.randn_like(x) * 1e-3)],
+                        [T.Lambda(lambda x: torch.randn_like(x) * self.eps)],
                         p=self.dropout_prob,
                     )
                     if not self.is_validation
