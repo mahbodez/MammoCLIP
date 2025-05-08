@@ -302,9 +302,10 @@ class MammogramTransform(Dictable):
             torch.Tensor: Augmented image tensor.
         """
         # ----------------- Dropout ----------------
+        size = img.size() if isinstance(img, torch.Tensor) else img.shape
         if self.dropout_prob > 0 and not self.is_validation:
             if torch.rand(1).item() < self.dropout_prob:
-                return torch.zeros(*self.size)
+                return torch.zeros(*size)
         return self.aug(img)
 
     def __call__(self, img: torch.Tensor | np.ndarray) -> torch.Tensor:
