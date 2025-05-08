@@ -50,7 +50,7 @@ train_ds:
       attrs_:
         is_validation: false
         prob: 0.5
-        dropout_prob: 0.0
+        dropout_prob: 0.15
         mean:
           - 0.281
         std:
@@ -78,7 +78,7 @@ train_ds:
         translate:
           - 0.05
           - 0.05
-        eps: 0.01
+        eps: 0.001
       class_: MammogramTransform
     weights_col: weight
   class_: MammogramDataset

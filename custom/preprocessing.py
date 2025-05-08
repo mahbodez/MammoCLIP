@@ -6,6 +6,7 @@ import cv2
 from skimage.measure import label, regionprops
 from torchvision import transforms as T
 import torch.nn as nn
+from torch.nn import ModuleList
 
 
 class MammogramPreprocessor(Dictable):
@@ -122,7 +123,7 @@ class MammogramPreprocessor(Dictable):
         return self.preprocess(img)
 
 
-class GaussianNoise(Dictable):
+class GaussianNoise(nn.Module):
     """
     Add Gaussian noise to an image.
     """
@@ -135,6 +136,7 @@ class GaussianNoise(Dictable):
             mean (float): Mean of the Gaussian noise.
             std (tuple): Standard deviation range of the Gaussian noise.
         """
+        super(GaussianNoise, self).__init__()
         if not isinstance(std, (tuple, list)) or len(std) != 2:
             raise ValueError("std must be a tuple/list of (min_std, max_std).")
         if std[0] < 0 or std[1] < 0:
@@ -144,10 +146,6 @@ class GaussianNoise(Dictable):
 
         self.mean = mean
         self.std = std
-
-    @property
-    def name(self):
-        return "GaussianNoise"
 
     def forward(self, img: torch.Tensor) -> torch.Tensor:
         """
@@ -160,16 +158,6 @@ class GaussianNoise(Dictable):
         sigma = torch.empty(1).uniform_(*self.std)
         noise = torch.randn_like(img) * sigma + self.mean
         return img + noise
-
-    def __call__(self, img: torch.Tensor) -> torch.Tensor:
-        """
-        Call method to apply Gaussian noise.
-        Args:
-            img (torch.Tensor): Input image tensor.
-        Returns:
-            torch.Tensor: Image with added Gaussian noise.
-        """
-        return self.forward(img)
 
 
 class MammogramTransform(Dictable):
@@ -241,14 +229,16 @@ class MammogramTransform(Dictable):
                 ),
                 (  # ----------Random Affine----------
                     T.RandomApply(
-                        [
-                            T.RandomAffine(
-                                degrees=self.degrees,
-                                translate=self.translate,
-                                shear=self.shear,
-                                interpolation=T.InterpolationMode.BILINEAR,
-                            )
-                        ],
+                        ModuleList(
+                            [
+                                T.RandomAffine(
+                                    degrees=self.degrees,
+                                    translate=self.translate,
+                                    shear=self.shear,
+                                    interpolation=T.InterpolationMode.BILINEAR,
+                                )
+                            ]
+                        ),
                         p=self.prob,
                     )
                     if not self.is_validation
@@ -256,11 +246,13 @@ class MammogramTransform(Dictable):
                 ),
                 (  # ----------Color Jitter----------
                     T.RandomApply(
-                        [
-                            T.ColorJitter(
-                                brightness=self.brightness, contrast=self.contrast
-                            )
-                        ],
+                        ModuleList(
+                            [
+                                T.ColorJitter(
+                                    brightness=self.brightness, contrast=self.contrast
+                                )
+                            ]
+                        ),
                         p=self.prob,
                     )
                     if not self.is_validation
@@ -268,13 +260,7 @@ class MammogramTransform(Dictable):
                 ),
                 (  # ----------Random Gamma Correction----------
                     T.RandomApply(
-                        [
-                            T.Lambda(
-                                lambda x: x.pow(
-                                    torch.empty(1).uniform_(*self.gamma).item()
-                                )
-                            )
-                        ],
+                        ModuleList([RandomGamma(self.gamma)]),
                         p=self.prob,
                     )
                     if not self.is_validation
@@ -282,7 +268,8 @@ class MammogramTransform(Dictable):
                 ),
                 (  # ----------Random Gaussian Noise----------
                     T.RandomApply(
-                        [GaussianNoise(mean=0.0, std=self.noise_std)], p=self.prob
+                        ModuleList([GaussianNoise(mean=0.0, std=self.noise_std)]),
+                        p=self.prob,
                     )
                     if not self.is_validation
                     else nn.Identity()
@@ -291,7 +278,7 @@ class MammogramTransform(Dictable):
                 T.Normalize(mean=self.mean, std=self.std),
                 (  # ----------Random pseudoDropout----------
                     T.RandomApply(
-                        [T.Lambda(lambda x: torch.randn_like(x) * self.eps)],
+                        ModuleList([PseudoDropout(self.eps)]),
                         p=self.dropout_prob,
                     )
                     if not self.is_validation
@@ -323,3 +310,25 @@ class MammogramTransform(Dictable):
             torch.Tensor: Augmented image tensor.
         """
         return self.forward(img)
+
+
+class RandomGamma(nn.Module):
+    def __init__(self, gamma_range):
+        super(RandomGamma, self).__init__()
+        self.gamma_range = gamma_range
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        # Apply random gamma correction within specified range
+        return x.pow(torch.empty(1).uniform_(*self.gamma_range).item())
+
+
+class PseudoDropout(nn.Module):
+    def __init__(self, eps):
+        super(PseudoDropout, self).__init__()
+        if eps <= 0:
+            raise ValueError("eps must be a positive value.")
+        self.eps = eps
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        # Apply pseudo-dropout
+        return torch.randn_like(x) * self.eps
