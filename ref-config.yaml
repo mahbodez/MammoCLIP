@@ -9,7 +9,7 @@ ddp_kwargs:
   find_unused_parameters: true
 max_checkpoints: 4
 pretrained_model_cfg:
-  fusion_type: attention
+  fusion_type: linear
   num_views: 4
   text_model_name_or_path: microsoft/BiomedVLP-CXR-BERT-general
   verbose: false
@@ -95,8 +95,8 @@ training_params:
   lr_scheduler: wsd_schedule
   max_grad_norm: 1.0
   mixed_precision: bf16
-  num_epochs: 30
-  steady_fraction: 0.05
+  num_epochs: 50
+  steady_fraction: 0.25
   train_fraction: 0.8
   warmup_fraction: 0.05
   weight_decay: 0.01
