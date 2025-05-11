@@ -326,6 +326,38 @@ class MammoCLIP(VisionTextDualEncoderModel):
             # vision_model_output=vision_outputs,
         )
 
+    def get_image_features(
+        self,
+        pixel_values: Optional[torch.FloatTensor] = None,
+        output_attentions: Optional[bool] = None,
+        output_hidden_states: Optional[bool] = None,
+        return_dict: Optional[bool] = None,
+    ) -> torch.FloatTensor:
+        """
+        Get image features from the model.
+
+        Args:
+            pixel_values (Optional[torch.FloatTensor]): Input image tensor for the vision encoder.
+            output_attentions (Optional[bool]): Whether to return attention weights.
+            output_hidden_states (Optional[bool]): Whether to return hidden states.
+            return_dict (Optional[bool]): Whether to return a dictionary or a tuple.
+
+        Returns:
+            torch.FloatTensor: The image features extracted from the model.
+        """
+        return_dict = (
+            return_dict if return_dict is not None else self.config.return_dict
+        )
+        outputs = self._process_images(
+            pixel_values=pixel_values,
+            output_attentions=output_attentions,
+            output_hidden_states=output_hidden_states,
+            return_dict=return_dict,
+        )["fused_embedding"]
+
+        img_embeds = self.visual_projection(outputs)
+        return img_embeds
+
     @classmethod
     def from_vision_text_pretrained(
         cls,
