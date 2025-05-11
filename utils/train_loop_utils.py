@@ -1,30 +1,11 @@
-import os
 from tqdm.auto import tqdm
 import torch
 from torch.amp import autocast, GradScaler
 from .dist_utils import is_main_process, synchronize, get_rank
-from typing import Tuple, Dict
 from custom.config import Config
-from .stats import (
-    get_gpu_memory_usage,
-    get_gpu_power_usage,
-    get_gpu_temperature,
-)
-from .train_utils import (
-    save_checkpoint,
-    cleanup_checkpoints,
-    evaluate,
-)
+from .stats import poll_gpu_stats
 from logging import Logger
 from torch.utils.tensorboard import SummaryWriter
-
-
-def poll_gpu_stats() -> Dict[str, float]:
-    return {
-        "vram": get_gpu_memory_usage().get("percentage", 0.0),
-        "pwr": get_gpu_power_usage().get("power", 0.0),
-        "temp": get_gpu_temperature().get("temp", 0.0),
-    }
 
 
 def train_one_epoch(
@@ -140,71 +121,3 @@ def train_one_epoch(
 
     pbar.close()
     return opt_steps
-
-
-def eval_and_checkpoint(
-    epoch: int,
-    config: Config,
-    model: torch.nn.Module,
-    optimizer: torch.optim.Optimizer,
-    scheduler: torch.optim.lr_scheduler.LRScheduler,
-    val_dl: torch.utils.data.DataLoader,
-    logger: Logger | None,
-    tb_writer: SummaryWriter | None,
-    resuming: bool,
-    optimization_steps: float,
-    best_metric: float = float("inf"),
-):
-    # evaluation
-    metric = None
-    if (epoch + 1) % config.eval_interval == 0:
-        metric = evaluate(model, val_dl, logger, tb_writer, int(optimization_steps))
-    # synchronize processes before saving
-    synchronize()
-    if is_main_process():
-        last = epoch == config.training_params["num_epochs"] - 1
-        # if best metric is lower than current metric, save the model
-        # regardless of the epoch
-        if metric is not None:
-            if metric < best_metric:
-                best_metric = metric
-                logger.info(f"New best metric: {best_metric}")
-                tb_writer.add_scalar(
-                    "val/best_metric",
-                    best_metric,
-                    global_step=optimization_steps,
-                )
-                # save the model
-                prefix = "model_best"
-                cleanup_checkpoints(config.project_dir, prefix, 1, logger)
-                # if wrapped in DDP, unwrap
-                base_model = model.module if hasattr(model, "module") else model
-                save_checkpoint(
-                    base_model,
-                    optimizer,
-                    scheduler,
-                    config.project_dir,
-                    prefix,
-                    epoch + 1,
-                    logger,
-                )
-        # save the model every save_interval epochs
-        if ((epoch + 1) % config.save_interval == 0) or last:
-            prefix = "model_resumed" if resuming else "model"
-            cleanup_checkpoints(
-                config.project_dir, prefix, config.max_checkpoints, logger
-            )
-            # if wrapped in DDP, unwrap
-            base_model = model.module if hasattr(model, "module") else model
-            save_checkpoint(
-                base_model,
-                optimizer,
-                scheduler,
-                config.project_dir,
-                prefix,
-                epoch + 1,
-                logger,
-            )
-            if not resuming:
-                config.to_yaml(os.path.join(config.project_dir, "config.yaml"))
-    return best_metric

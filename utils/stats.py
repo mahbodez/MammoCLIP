@@ -255,3 +255,11 @@ def get_gpu_temperature():
 
     except Exception:
         return {}
+
+
+def poll_gpu_stats() -> Dict[str, float]:
+    return {
+        "vram": get_gpu_memory_usage().get("percentage", 0.0),
+        "pwr": get_gpu_power_usage().get("power", 0.0),
+        "temp": get_gpu_temperature().get("temp", 0.0),
+    }

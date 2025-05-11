@@ -1,103 +1,144 @@
+import os
 import torch
-import numpy as np
-from sklearn.metrics import (
-    accuracy_score,
-    precision_score,
-    recall_score,
-    f1_score,
-    confusion_matrix,
-)
-from torch.utils.data import DataLoader
-from custom.mammodata import MammogramDataset
-from custom.model import MammoCLIP
+import torch.nn as nn
 from tqdm.auto import tqdm
+from custom.config import Config
+from .dist_utils import (
+    is_main_process,
+    get_rank,
+    synchronize,
+    is_dist_avail_and_initialized,
+    reduce_tensor,
+)
+from .checkpoint import cleanup_checkpoints, save_checkpoint
+from tensorboard import SummaryWriter
+from logging import Logger
+
+
+def eval_and_checkpoint(
+    epoch: int,
+    config: Config,
+    model: torch.nn.Module,
+    optimizer: torch.optim.Optimizer,
+    scheduler: torch.optim.lr_scheduler.LRScheduler,
+    val_dl: torch.utils.data.DataLoader,
+    logger: Logger | None,
+    tb_writer: SummaryWriter | None,
+    resuming: bool,
+    optimization_steps: float,
+    best_metric: float = float("inf"),
+):
+    # evaluation
+    metric = None
+    if (epoch + 1) % config.eval_interval == 0:
+        metric = evaluate_loss(
+            model, val_dl, logger, tb_writer, int(optimization_steps)
+        )
+    # synchronize processes before saving
+    synchronize()
+    if is_main_process():
+        last = epoch == config.training_params["num_epochs"] - 1
+        # if best metric is lower than current metric, save the model
+        # regardless of the epoch
+        if metric is not None:
+            if metric < best_metric:
+                best_metric = metric
+                logger.info(f"New best metric: {best_metric}")
+                tb_writer.add_scalar(
+                    "val/best_metric",
+                    best_metric,
+                    global_step=optimization_steps,
+                )
+                # save the model
+                prefix = "model_best"
+                cleanup_checkpoints(config.project_dir, prefix, 1, logger)
+                # if wrapped in DDP, unwrap
+                base_model = model.module if hasattr(model, "module") else model
+                save_checkpoint(
+                    base_model,
+                    optimizer,
+                    scheduler,
+                    config.project_dir,
+                    prefix,
+                    epoch + 1,
+                    logger,
+                )
+        # save the model every save_interval epochs
+        if ((epoch + 1) % config.save_interval == 0) or last:
+            prefix = "model_resumed" if resuming else "model"
+            cleanup_checkpoints(
+                config.project_dir, prefix, config.max_checkpoints, logger
+            )
+            # if wrapped in DDP, unwrap
+            base_model = model.module if hasattr(model, "module") else model
+            save_checkpoint(
+                base_model,
+                optimizer,
+                scheduler,
+                config.project_dir,
+                prefix,
+                epoch + 1,
+                logger,
+            )
+            if not resuming:
+                config.to_yaml(os.path.join(config.project_dir, "config.yaml"))
+    return best_metric
 
 
 @torch.inference_mode()
-def evaluate_birads(
-    model: MammoCLIP,
-    dataset: MammogramDataset,
-    batch_size: int = 16,
-    device: str = None,
-    birads_classes: list = list(range(7)),
+def evaluate_loss(
+    model: nn.Module,
+    val_dl: torch.utils.data.DataLoader,
+    logger: Logger | None,
+    tb_writer: SummaryWriter,
+    step: int,
 ):
     """
-    Evaluate a CLIP-based model on mammogram birads classification.
-
-    Args:
-        model: VisionTextDualEncoderModel that scores text vs images.
-        dataset: MammogramDataset with df containing 'left_birads' and 'right_birads'.
-        batch_size: batch size for inference.
-        device: computation device (e.g., 'cuda' or 'cpu').
-        birads_classes: list of class labels (0..6).
-
-    Returns:
-        dict: metrics including accuracy, precision, recall, f1, and confusion matrix.
+    Evaluate model on validation loader, aggregate loss across DDP, and log on main process.
     """
-    # set device
-    if device is None:
-        device = next(model.parameters()).device
+    gpu_id = get_rank()
+    pbar = tqdm(
+        total=len(val_dl),
+        disable=not is_main_process(),
+        desc="Validation",
+        leave=False,
+        dynamic_ncols=True,
+        colour="blue",
+    )
+    losses = []
+    # Dont forget to set_epoch for the sampler
+    if hasattr(val_dl.sampler, "set_epoch"):
+        val_dl.sampler.set_epoch(step)
     model.eval()
-
-    # prepare class text embeddings
-    classes = [f"BI-RADS {c}" for c in birads_classes]
-    tokenizer = dataset.tokenizer
-    text_inputs = tokenizer(classes, **dataset.tokenizer_kwargs)
-    for k, v in text_inputs.items():
-        text_inputs[k] = v.to(device)
-
-    # precompute ground-truth labels array
-    df = dataset.df
-    left = df["left_birads"].astype(int).to_numpy()
-    right = df["right_birads"].astype(int).to_numpy()
-    labels_all = np.maximum(left, right)
-
-    # DataLoader for batching
-    loader = DataLoader(dataset, batch_size=batch_size, shuffle=False)
-
-    all_preds = []
-    all_labels = []
-
-    with torch.no_grad():
-        for batch_idx, batch in tqdm(
-            enumerate(loader), total=len(loader), desc="Evaluating"
-        ):
-            # move images to device
-            imgs = batch["pixel_values"].to(device)
-            # forward pass: text vs image similarity
-            outputs = model(
-                input_ids=text_inputs["input_ids"],
-                attention_mask=text_inputs.get("attention_mask"),
-                token_type_ids=text_inputs.get("token_type_ids"),
-                pixel_values=imgs,
-                return_dict=True,
-            )
-            logits = outputs["logits_per_image"]  # (batch, n_classes)
-            probs = torch.softmax(logits, dim=1)
-            preds = probs.argmax(dim=1).cpu().numpy()
-
-            # slice true labels for this batch
-            start = batch_idx * batch_size
-            labels = labels_all[start : start + preds.shape[0]]
-
-            all_preds.extend(preds.tolist())
-            all_labels.extend(labels.tolist())
-
-    # compute metrics
-    acc = accuracy_score(all_labels, all_preds)
-    prec = precision_score(all_labels, all_preds, average="macro", zero_division=0)
-    rec = recall_score(all_labels, all_preds, average="macro", zero_division=0)
-    f1 = f1_score(all_labels, all_preds, average="macro", zero_division=0)
-    cm = confusion_matrix(all_labels, all_preds, labels=birads_classes)
-    # make a confusion matrix for the 7 classes
-    cm = confusion_matrix(all_labels, all_preds, labels=birads_classes)
-
-    # return metrics
-    torch.cuda.empty_cache()
-    return {
-        "accuracy": acc,
-        "precision": prec,
-        "recall": rec,
-        "f1": f1,
-        "confusion_matrix": cm,
-    }
+    # -------------------- DDP-aware evaluation loop -------------------
+    synchronize()  # synchronize before starting
+    for batch in val_dl:
+        # move batch to local rank GPU
+        for k, v in batch.items():
+            if isinstance(v, torch.Tensor):
+                batch[k] = v.to(gpu_id)
+        # forward
+        output = model(**batch, return_loss=True)
+        loss = output["loss"].item()
+        losses.append(loss)
+        pbar.update(1)
+        pbar.set_postfix({"val_loss": loss})
+    pbar.close()
+    # ------------------------------------------------------------------
+    # DDP-aware evaluation statistics
+    local_sum = sum(losses)
+    local_count = len(losses)
+    if is_dist_avail_and_initialized():
+        device = next(model.parameters()).device
+        stats = torch.tensor([local_sum, local_count], device=device)
+        stats = reduce_tensor(stats)
+        total_sum, total_count = stats.tolist()
+        avg = total_sum / total_count if total_count > 0 else 0.0
+    else:
+        avg = local_sum / local_count if local_count > 0 else 0.0
+    # log only from the main process
+    if is_main_process():
+        logger.info(f"Val loss @ step {step}: {avg:.4f}")
+        tb_writer.add_scalar("val/loss", avg, global_step=step)
+    model.train()
+    return avg

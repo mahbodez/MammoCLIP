@@ -13,7 +13,8 @@ from utils.dist_utils import is_main_process, init_distributed_mode, cleanup
 from utils.model_utils import build_model_and_optim
 from utils.data_utils import prepare_dataloaders
 from utils.seed_utils import set_seed
-from utils.train_loop_utils import train_one_epoch, eval_and_checkpoint
+from utils.train_loop_utils import train_one_epoch
+from utils.eval import eval_and_checkpoint
 from utils.resume import find_latest_checkpoint
 from utils.logger import init_logger, init_tensorboard
 
