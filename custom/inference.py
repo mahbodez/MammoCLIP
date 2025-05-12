@@ -193,6 +193,7 @@ def infer_single_mammogram(
     return probs.cpu().squeeze().numpy()  # (num_queries,)
 
 
+@torch.inference_mode()
 def infer_from_views(
     views: list[str],
     query_embeddings: torch.Tensor,
@@ -200,6 +201,7 @@ def infer_from_views(
     config: Config,
     preprocessor: MammogramPreprocessor = None,
     transform: MammogramTransform = None,
+    tau: float = None,
     device: str = None,
 ) -> np.ndarray:
     """
@@ -212,20 +214,24 @@ def infer_from_views(
         config (Config): Configuration object for the model and preprocessing.
         preprocessor (MammogramPreprocessor, optional): Preprocessing function or object to apply to each view before embedding.
         transform (MammogramTransform, optional): Additional transformation to apply to each view.
+        tau (float, optional): Temperature scaling factor for logits. If None, uses the model's logit scale.
         device (str, optional): Device to perform computation on (e.g., 'cpu' or 'cuda'). If None, uses default device.
 
     Returns:
         np.ndarray: Array of probabilities (shape: (num_queries,)) representing the softmax-normalized similarity between the embedded views and each query embedding.
     """
+    if tau is None:
+        tau = model.logit_scale.exp().item()
     views_emb = embed_views(views, model, config, preprocessor, transform, device)
     # view embeddings are of (1, dim) shape
-    logits = 100.0 * views_emb @ query_embeddings.T
+    logits = tau * views_emb @ query_embeddings.T
     # logits is of (1, num_queries) shape
     probs = torch.softmax(logits, dim=-1)
     # probs is of (1, num_queries) shape
     return probs.cpu().squeeze().numpy()  # (num_queries,)
 
 
+@torch.inference_mode()
 def infer_from_view_batch(
     view_batch: list[list[str]],
     query_embeddings: torch.Tensor,
@@ -233,6 +239,7 @@ def infer_from_view_batch(
     config: Config,
     preprocessor: MammogramPreprocessor = None,
     transform: MammogramTransform = None,
+    tau: float = None,
     device: str = None,
 ) -> np.ndarray:
     """
@@ -245,16 +252,19 @@ def infer_from_view_batch(
         config (Config): Configuration object for the model and preprocessing.
         preprocessor (MammogramPreprocessor, optional): Preprocessing function or object to apply to each view before embedding.
         transform (MammogramTransform, optional): Additional transformation to apply to each view.
+        tau (float, optional): Temperature scaling factor for logits. If None, uses the model's logit scale.
         device (str, optional): Device to perform computation on (e.g., 'cpu' or 'cuda'). If None, uses default device.
 
     Returns:
         np.ndarray: Array of probabilities (shape: (batch_size, num_queries)) representing the softmax-normalized similarity between the embedded views and each query embedding.
     """
+    if tau is None:
+        tau = model.logit_scale.exp().item()
     views_emb = batch_embed_views(
         view_batch, model, config, preprocessor, transform, device
     )
     # view embeddings are of (batch_size, dim) shape
-    logits = 100.0 * views_emb @ query_embeddings.T
+    logits = tau * views_emb @ query_embeddings.T
     # logits is of (batch_size, num_queries) shape
     probs = torch.softmax(logits, dim=-1)
     # probs is of (batch_size, num_queries) shape
