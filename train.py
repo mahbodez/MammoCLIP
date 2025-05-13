@@ -1,5 +1,3 @@
-import re
-from typing import Tuple
 import torch
 from torch.utils.data import DataLoader
 import os
@@ -37,7 +35,8 @@ def training_loop(
 
     opt_steps = 0.0
 
-    best_metric = float("inf")
+    lowest_loss = float("inf")
+    best_metric = float("inf") if config.metric_criterion == "lowest" else 0.0
 
     # Now you train the model
     for epoch in range(starting_epoch, config.training_params["num_epochs"]):
@@ -53,7 +52,7 @@ def training_loop(
             optimization_steps=opt_steps,
         )
 
-        best_metric = eval_and_checkpoint(
+        lowest_loss, best_metric = eval_and_checkpoint(
             epoch=epoch,
             config=config,
             model=model,
@@ -64,6 +63,10 @@ def training_loop(
             tb_writer=tb_writer,
             resuming=resuming,
             optimization_steps=opt_steps,
+            lowest_loss=lowest_loss,
+            metric_query=config.metric_query,
+            metric=config.metric,
+            metric_criterion=config.metric_criterion,
             best_metric=best_metric,
         )
     torch.cuda.empty_cache()
