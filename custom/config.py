@@ -149,6 +149,7 @@ class Config:
             weight_col="weight",
             view_cols=["r_cc", "l_cc", "r_mlo", "l_mlo"],
             batch_size=16,
+            tau=100.0,
             query_dict=dict(
                 mass=dict(
                     label_col="any_mass", query2label={"No mass": 0, "Mass present": 1}

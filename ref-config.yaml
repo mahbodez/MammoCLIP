@@ -145,6 +145,7 @@ infer_settings:
     - r_mlo
     - l_mlo
   batch_size: 16
+  tau: 100.0
   query_dict:
     birads:
       label_col: birads

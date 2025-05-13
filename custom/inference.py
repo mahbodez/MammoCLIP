@@ -306,6 +306,7 @@ def evaluate(
     label_col: str,
     model: MammoCLIP,
     config: Config,
+    tau: float = None,
     device: str = None,
 ) -> dict:
     """
@@ -322,6 +323,8 @@ def evaluate(
         config (Config): Configuration object containing preprocessing and transformation settings.
         query2label (dict, optional): Dictionary mapping query strings to their corresponding labels.
             Useful for matching with queries. Defaults to None.
+        tau (float, optional): Temperature scaling factor for logits. If None, uses the model's logit scale.
+        device (str, optional): The device to run the inference on. If None, uses the model's device.
     Returns:
         dict: A dictionary containing the following keys:
             - "accuracy": (float) Overall classification accuracy.
@@ -369,7 +372,7 @@ def evaluate(
     for _, row in tqdm(df.iterrows(), total=len(df), desc="Evaluating"):
         views = [row[c] for c in view_cols]
         scores = infer_from_views(
-            views, query_embeddings, model, config, preprocessor, transform, device
+            views, query_embeddings, model, config, preprocessor, transform, tau, device
         )
         pred_index = int(np.argmax(scores))
         y_pred.append(pred_index)
@@ -411,6 +414,7 @@ def evaluate_batch(
     model: MammoCLIP,
     config: Config,
     batch_size: int = 4,
+    tau: float = None,
     device: str = None,
 ) -> dict:
     """
@@ -428,6 +432,9 @@ def evaluate_batch(
         batch_size (int, optional): The size of the batch to create. Defaults to 4.
         query2label (dict, optional): Dictionary mapping query strings to their corresponding labels.
             Useful for matching with queries. Defaults to None.
+        tau (float, optional): Temperature scaling factor for logits. If None, uses the model's logit scale.
+        device (str, optional): The device to run the inference on. If None, uses the model's device.
+
     Returns:
         dict: A dictionary containing the following keys:
             - "accuracy": (float) Overall classification accuracy.
@@ -481,6 +488,7 @@ def evaluate_batch(
             config,
             preprocessor,
             transform,
+            tau,
             device,
         ).tolist()
         pred_index = np.argmax(scores, axis=-1).tolist()

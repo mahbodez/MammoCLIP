@@ -276,6 +276,7 @@ def evaluate_metrics(
     replace = config.infer_settings.get("replace", True)
     image_cols = config.infer_settings["view_cols"]
     batch_size = config.infer_settings.get("batch_size", 8)
+    tau = config.infer_settings.get("tau", 100.0)
 
     weights = None
     if weight_col:
@@ -298,6 +299,7 @@ def evaluate_metrics(
                 model=base_model,
                 config=config,
                 batch_size=batch_size,
+                tau=tau,
             )
         except Exception as e:
             logger.error(f"Exception @ inference: {e}")
