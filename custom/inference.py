@@ -473,7 +473,7 @@ def evaluate_batch(
     y_pred = []
     y_scores = []
     batches = make_views_batches(df, view_cols, batch_size)
-    for batch in tqdm(batches, desc="Evaluating"):
+    for batch in tqdm(batches, desc=f"Evaluating {label_col}"):
         scores = infer_from_view_batch(
             batch,
             query_embeddings,
