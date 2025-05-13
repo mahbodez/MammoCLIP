@@ -1,6 +1,6 @@
 import pytest
 import torch.distributed as dist
-from custom import DistributedWeightedRandomSampler
+from custom.sampler import DistributedWeightedRandomSampler
 
 
 @pytest.fixture(autouse=True)
