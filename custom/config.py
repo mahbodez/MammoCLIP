@@ -141,8 +141,58 @@ class Config:
         )
     )
 
+    infer_settings: dict = field(
+        default_factory=lambda: dict(
+            csv_path="./data/inference-clean.csv",
+            sample_size=1000,
+            replace=True,
+            weight_col="weight",
+            view_cols=["r_cc", "l_cc", "r_mlo", "l_mlo"],
+            batch_size=16,
+            query_dict=dict(
+                mass=dict(
+                    label_col="any_mass", query2label={"No mass": 0, "Mass present": 1}
+                ),
+                calcification=dict(
+                    label_col="any_microcal",
+                    query2label={
+                        "No microcalcification": 0,
+                        "Microcalcification present": 1,
+                    },
+                ),
+                composition=dict(
+                    label_col="composition",
+                    query2label={
+                        "Composition A": 0,
+                        "Composition B": 1,
+                        "Composition C": 2,
+                        "Composition D": 3,
+                    },
+                ),
+                birads=dict(
+                    label_col="birads",
+                    query2label={
+                        "BI-RADS 0": 0,
+                        "BI-RADS 1": 1,
+                        "BI-RADS 2": 2,
+                        "BI-RADS 3": 3,
+                        "BI-RADS 4": 4,
+                        "BI-RADS 5": 5,
+                        "BI-RADS 6": 6,
+                    },
+                ),
+            ),
+            tensorboard_metrics=["auc", "accuracy"],
+            logger_metrics=["report", "auc"],
+        )
+    )
+
     eval_interval: int = 1  # epoch
+    infer_interval: int = 1  # epoch
     save_interval: int = 1  # epoch
+    metric_criterion: str = "highest"
+    metric: str = "accuracy"
+    metric_query: str = "birads"
     max_checkpoints: int = 5  # max number of checkpoints to keep
 
     pretrained_model_cfg: dict = field(
@@ -273,7 +323,14 @@ class Config:
             raise ValueError("File must be a .yaml or .yml file")
         os.makedirs(os.path.dirname(yaml_path), exist_ok=True)
         with open(yaml_path, "w") as f:
-            yaml.dump(self.to_dict(), f)
+            # dump the dict with the original orderings
+            yaml.dump(
+                self.to_dict(),
+                f,
+                Dumper=yaml.Dumper,
+                default_flow_style=False,
+                sort_keys=False,
+            )
         logger.info(f"Config saved to {yaml_path}")
 
     @classmethod
